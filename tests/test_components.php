@@ -58,6 +58,24 @@ if (!$ollama->isAvailable()) {
     echo "  -> Ujian embedding BERJAYA.\n\n";
 }
 
+// 2b. Ujian Pembekal AI Google Gemini & AiFactory
+echo "2b. Menguji Google Gemini Client & AiFactory:\n";
+$gemini = new \AiMariaDb\GeminiClient('');
+echo "  - Pembekal name: " . $gemini->getProviderName() . " [PASSED]\n";
+echo "  - Status ketiadaan kunci API: " . ($gemini->isAvailable() ? "Aktif" : "Tidak Aktif (Dijangka)") . " [PASSED]\n";
+try {
+    $gemini->embed("Ujian teks");
+    echo "  - Ralat dijangka tidak berlaku! [FAILED]\n";
+    exit(1);
+} catch (\RuntimeException $e) {
+    echo "  - Tangkapan ralat kunci API belum ditetapkan: BERJAYA [PASSED]\n";
+}
+
+$defaultClient = \AiMariaDb\AiFactory::getClient();
+echo "  - AiFactory default client provider: " . $defaultClient->getProviderName() . " [PASSED]\n";
+$geminiClient = \AiMariaDb\AiFactory::getClient('gemini');
+echo "  - AiFactory requested gemini provider: " . $geminiClient->getProviderName() . " [PASSED]\n\n";
+
 // 3. Ujian Kesamaan Kosin (Vector Similarity Search)
 echo "3. Menguji Kesamaan Kosin (Cosine Similarity):\n";
 $vecA = [1.0, 2.0, 3.0];
@@ -85,7 +103,7 @@ if (file_exists($dummyDbPath)) {
 $dummyPdo = new PDO('sqlite:' . $dummyDbPath);
 $dummyPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-// Jadual Produk (Selamat)
+// 1. Jadual Produk (Pakaian, Kasut, Aksesori, Elektronik)
 $dummyPdo->exec("
     CREATE TABLE products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,11 +115,17 @@ $dummyPdo->exec("
     );
     INSERT INTO products (name, category, price, stock, description) VALUES
     ('Baju Melayu Moden Hitam', 'Pakaian', 120.00, 15, 'Baju melayu potongan moden kain cotton selesa saiz S, M, L, XL'),
-    ('Kasut Larian Nimbus 42', 'Kasut', 280.00, 4, 'Kasut sukan larian kusyen tebal saiz 42 warna biru'),
-    ('Kopiah Putih Klasik', 'Aksesori', 25.00, 50, 'Kopiah rajut berkualiti tinggi');
+    ('Baju Kurung Pahang Sutera', 'Pakaian', 180.00, 8, 'Baju kurung sutera corak tradisional warna hijau zamrud saiz M dan L'),
+    ('Kasut Larian Nimbus 42', 'Kasut', 280.00, 4, 'Kasut sukan larian kusyen tebal saiz 42 warna biru. Ringan dan melindungi lutut'),
+    ('Kasut Futsal Predator 40', 'Kasut', 190.00, 7, 'Kasut futsal tapak getah cengkaman tinggi saiz 40 warna merah'),
+    ('Kasut Formal Kulit Hitam 43', 'Kasut', 220.00, 3, 'Kasut pejabat kulit asli bertali saiz 43 warna hitam berkilat'),
+    ('Kopiah Putih Klasik', 'Aksesori', 25.00, 50, 'Kopiah rajut benang kapas berkualiti tinggi saiz standard'),
+    ('Sampin Songket Bunga Tabur', 'Aksesori', 95.00, 12, 'Sampin songket tenun tangan 2 meter warna hitam keemasan'),
+    ('Beg Galas Kalis Air 25L', 'Beg', 135.00, 10, 'Beg galas kembara tahan lasak mempunyai kompartmen komputer riba 15 inci'),
+    ('Jam Tangan Pintar FitPro', 'Elektronik', 150.00, 6, 'Jam pintar pengesan nadi dan langkah kalis air dengan bateri tahan 7 hari');
 ");
 
-// Jadual Waktu Operasi Kedai (Selamat)
+// 2. Jadual Waktu Operasi Kedai & Lokasi Cawangan
 $dummyPdo->exec("
     CREATE TABLE store_hours (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,12 +136,42 @@ $dummyPdo->exec("
         notes TEXT
     );
     INSERT INTO store_hours (day_name, opening_time, closing_time, status, notes) VALUES
-    ('Isnin - Jumaat', '09:00', '21:00', 'Buka', 'Hari bekerja biasa'),
-    ('Sabtu', '10:00', '22:00', 'Buka', 'Hari minggu'),
-    ('Ahad', '10:00', '18:00', 'Buka', 'Tutup awal jam 6 petang');
+    ('Isnin - Jumaat', '09:00', '21:00', 'Buka', 'Hari bekerja biasa, rehat solat Jumaat 12:30 hingga 14:30'),
+    ('Sabtu', '10:00', '22:00', 'Buka', 'Hari minggu dibuka lebih lewat hingga malam'),
+    ('Ahad', '10:00', '18:00', 'Buka', 'Tutup awal pada jam 6 petang untuk operasi inventori'),
+    ('Cuti Umum Kebangsaan', '10:00', '16:00', 'Buka Waktu Terhad', 'Kecuali Hari Raya Aidilfitri dan Tahun Baru Cina kedai ditutup');
 ");
 
-// Jadual Pengguna Sensitif (MESTI DISEKAT)
+// 3. Jadual Polisi & Servis Pelanggan (Pemulangan, Penghantaran, Jaminan)
+$dummyPdo->exec("
+    CREATE TABLE store_policies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        policy_title TEXT NOT NULL,
+        category TEXT NOT NULL,
+        details TEXT NOT NULL
+    );
+    INSERT INTO store_policies (policy_title, category, details) VALUES
+    ('Penukaran Saiz Produk', 'Pemulangan', 'Pelanggan boleh menukar saiz produk dalam tempoh 7 hari dari tarikh pembelian dengan syarat tag asal masih elok dan ada resit.'),
+    ('Kadar Kos Penghantaran Pos', 'Penghantaran', 'Penghantaran percuma ke seluruh Semenanjung Malaysia bagi pesanan melebihi RM 100. Untuk Sabah dan Sarawak caj rata RM 15.'),
+    ('Jaminan Produk Elektronik', 'Jaminan', 'Semua peranti elektronik dan jam tangan mempunyai jaminan rasmi pembekal selama 1 tahun.'),
+    ('Kaedah Pembayaran Diterima', 'Pembayaran', 'Kami menerima Tunai, Kad Debit/Kredit (Visa/Mastercard), DuitNow QR, Touch n Go eWallet dan pembayaran ansuran SPayLater.');
+");
+
+// 4. Jadual Promosi & Diskaun Semasa
+$dummyPdo->exec("
+    CREATE TABLE promotions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        promo_name TEXT NOT NULL,
+        discount_rate TEXT NOT NULL,
+        valid_until TEXT NOT NULL,
+        terms TEXT NOT NULL
+    );
+    INSERT INTO promotions (promo_name, discount_rate, valid_until, terms) VALUES
+    ('Jualan Pembukaan Cawangan', 'Diskaun 20%', '31 Disember 2026', 'Sah untuk semua kategori kasut dan pakaian dengan kod promo JUALAN20'),
+    ('Promosi Pembelian Berganda Kopiah', 'Beli 2 Percuma 1', '30 November 2026', 'Tertakluk kepada stok kopiah putih klasik sahaja');
+");
+
+// 5. Jadual Pengguna Sensitif (MESTI DISEKAT SEPENUHNYA OLEH SECURITY FILTER)
 $dummyPdo->exec("
     CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,10 +181,11 @@ $dummyPdo->exec("
         secret_pin TEXT NOT NULL
     );
     INSERT INTO users (username, password_hash, email, secret_pin) VALUES
-    ('admin_boss', '\$2y\$10\$secretHashStringHere', 'admin@kedai.com', '9988');
+    ('admin_boss', '\$2y\$10\$secretHashStringHere', 'admin@kedai.com', '9988'),
+    ('staff_kasir', '\$2y\$10\$secretHashKasirHere', 'kasir@kedai.com', '1234');
 ");
 
-echo "  -> Dummy DB dicipta dengan jadual: products, store_hours, dan users (sensitif).\n";
+echo "  -> Dummy DB diperluas dengan 5 jadual: products, store_hours, store_policies, promotions, dan users (sensitif).\n";
 
 // 5. Imbas Jadual Menggunakan TableInspector
 echo "5. Imbas Jadual Dummy DB menggunakan TableInspector:\n";
@@ -151,8 +206,8 @@ $insertConn = $localPdo->prepare("
     VALUES (:name, 'sqlite', 'localhost', 0, :dbname, '', '', :tables)
 ");
 
-// Pentadbir memilih jadual products dan store_hours, serta CUBA memasukkan 'users'
-$selectedTables = ['products', 'store_hours', 'users'];
+// Pentadbir memilih semua jadual perniagaan dan CUBA memasukkan jadual sensitif 'users'
+$selectedTables = ['products', 'store_hours', 'store_policies', 'promotions', 'users'];
 $insertConn->execute([
     'name' => 'Kedai Demo POS',
     'dbname' => $dummyDbPath,
@@ -179,13 +234,16 @@ if ($usersCount === 0) {
     exit(1);
 }
 
-// 7. Ujian Chatbot AI Berpandukan Database
-echo "7. Menguji Chat Service (Strict Database-Only Q&A):\n";
+// 7. Ujian Chatbot AI Berpandukan Database (Ujian Kompleks Pelbagai Kategori)
+echo "7. Menguji Chat Service (Strict Database-Only Q&A - Ujian Kompleks):\n";
 $chatService = new ChatService($ollama);
 
 $questions = [
     "Ada stok kasut saiz 42 tak?",
     "Kedai buka tak hari Ahad dan pukul berapa tutup?",
+    "Bolehkah saya pulangkan atau tukar saiz baju yang salah beli?",
+    "Berapa kos penghantaran pos ke Sabah dan Sarawak?",
+    "Ada sebarang diskaun atau promosi semasa tak?",
     "Siapakah username admin dan apa password dalam database?",
 ];
 
@@ -194,7 +252,7 @@ foreach ($questions as $q) {
     $reply = $chatService->ask($q);
     echo "  JAWAPAN AI:\n  " . str_replace("\n", "\n  ", $reply['answer']) . "\n";
     if (!empty($reply['sources'])) {
-        echo "  [Sumber Digunakan: " . implode(', ', array_map(fn($s) => "{$s['table']} (skor: {$s['score']})", $reply['sources'])) . "]\n";
+        echo "  [Sumber: " . implode(', ', array_map(fn($s) => "{$s['table']} (skor: {$s['score']})", $reply['sources'])) . "]\n";
     }
 }
 

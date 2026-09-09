@@ -1,8 +1,25 @@
 <?php
 declare(strict_types=1);
 
-// Contoh laman web kedai e-dagang / perniagaan PHP
+require_once dirname(__DIR__) . '/src/bootstrap.php';
 require_once dirname(__DIR__) . '/plugin/embed.php';
+
+use AiMariaDb\Config;
+
+$products = [];
+try {
+    $dbPath = Config::getDataDir() . '/dummy_pos.sqlite';
+    if (file_exists($dbPath)) {
+        $pdo = new PDO('sqlite:' . $dbPath, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $stmt = $pdo->query("SELECT * FROM products ORDER BY id ASC");
+        $products = $stmt->fetchAll();
+    }
+} catch (\Throwable $e) {
+    // Abaikan dan kekalkan array kosong jika ralat sambungan
+}
 ?>
 <!DOCTYPE html>
 <html lang="ms">
@@ -236,6 +253,49 @@ require_once dirname(__DIR__) . '/plugin/embed.php';
             align-items: center;
             gap: 12px;
         }
+
+        /* Mobile Responsive */
+        @media (max-width: 640px) {
+            nav {
+                padding: 14px 16px;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .hero {
+                padding: 40px 16px 20px;
+            }
+
+            .hero h1 {
+                font-size: 28px;
+            }
+
+            .hero p {
+                font-size: 15px;
+            }
+
+            .section-title {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .product-grid {
+                grid-template-columns: 1fr;
+                padding: 0 16px;
+            }
+
+            .hours-box {
+                margin: 20px 16px 40px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 14px;
+            }
+
+            .notice-banner {
+                margin: 14px 16px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -264,41 +324,53 @@ require_once dirname(__DIR__) . '/plugin/embed.php';
         <p>Beli-belah dengan mudah. Anda boleh bertanyakan status stok, saiz, dan waktu operasi kedai kepada Pembantu Pintar AI kami di sudut bawah kanan.</p>
     </section>
 
+    <?php
+    $catIcons = [
+        'Pakaian' => '👕',
+        'Kasut' => '👟',
+        'Aksesori' => '🧣',
+        'Beg' => '🎒',
+        'Elektronik' => '⌚',
+    ];
+    ?>
+
     <div class="section-title" id="katalog">
-        <span>Katalog Terpilih</span>
-        <span style="font-size: 13px; font-weight: 500; color: #64748b;">Data diekstrak terus dari database MariaDB / SQLite</span>
+        <div>
+            <span>Katalog Terpilih</span>
+            <span style="display: block; font-size: 13px; font-weight: 500; color: #64748b; margin-top: 4px;">
+                Semua <?= count($products) ?> produk dimuat terus daripada database (SQL: <code>products</code>)
+            </span>
+        </div>
+        <span style="font-size: 12px; font-weight: 600; color: #059669; background: #ecfdf5; padding: 6px 14px; border-radius: 20px; border: 1px solid #a7f3d0; display: inline-flex; align-items: center; gap: 6px;">
+            <span style="display: inline-block; width: 8px; height: 8px; background: #10b981; border-radius: 50%;"></span>
+            Data SQL (<?= count($products) ?> Item)
+        </span>
     </div>
 
     <div class="product-grid">
-        <div class="product-card">
-            <span class="product-badge">Pakaian Tradisional</span>
-            <div class="product-title">Baju Melayu Moden Hitam</div>
-            <div class="product-desc">Baju melayu potongan moden kain cotton selesa saiz S, M, L, XL. Sesuai untuk acara rasmi dan hari raya.</div>
-            <div class="product-meta">
-                <span class="product-price">RM 120.00</span>
-                <span class="product-stock">Tersedia: 15 unit</span>
+        <?php if (empty($products)): ?>
+            <div style="grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: #64748b; background: #fff; border-radius: 16px; border: 1px dashed #cbd5e1;">
+                Tiada produk dijumpai dalam database. Sila pastikan jadual <code>products</code> telah diisi.
             </div>
-        </div>
-
-        <div class="product-card">
-            <span class="product-badge">Kasut & Sukan</span>
-            <div class="product-title">Kasut Larian Nimbus 42</div>
-            <div class="product-desc">Kasut sukan larian kusyen tebal saiz 42 warna biru. Ringan dan melindungi lutut ketika berjoging.</div>
-            <div class="product-meta">
-                <span class="product-price">RM 280.00</span>
-                <span class="product-stock">Tersedia: 4 unit (Stok Terhad)</span>
-            </div>
-        </div>
-
-        <div class="product-card">
-            <span class="product-badge">Aksesori</span>
-            <div class="product-title">Kopiah Putih Klasik</div>
-            <div class="product-desc">Kopiah rajut berkualiti tinggi, kemas dan selesa dipakai sepanjang hari.</div>
-            <div class="product-meta">
-                <span class="product-price">RM 25.00</span>
-                <span class="product-stock">Tersedia: 50 unit</span>
-            </div>
-        </div>
+        <?php else: ?>
+            <?php foreach ($products as $prod): 
+                $cat = $prod['category'] ?? 'Produk';
+                $icon = $catIcons[$cat] ?? '📦';
+                $isLowStock = (int)($prod['stock'] ?? 0) <= 5;
+            ?>
+                <div class="product-card">
+                    <span class="product-badge"><?= $icon ?> <?= htmlspecialchars($cat) ?></span>
+                    <div class="product-title"><?= htmlspecialchars($prod['name'] ?? '') ?></div>
+                    <div class="product-desc"><?= htmlspecialchars($prod['description'] ?? '') ?></div>
+                    <div class="product-meta">
+                        <span class="product-price">RM <?= number_format((float)($prod['price'] ?? 0), 2) ?></span>
+                        <span class="product-stock" style="<?= $isLowStock ? 'color: #ea580c;' : 'color: #059669;' ?>">
+                            Tersedia: <?= (int)($prod['stock'] ?? 0) ?> unit<?= $isLowStock ? ' (Stok Terhad)' : '' ?>
+                        </span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
     </div>
 
     <div class="hours-box" id="waktu">

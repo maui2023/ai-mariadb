@@ -16,6 +16,7 @@ use AiMariaDb\ChatService;
 
 $input = json_decode(file_get_contents('php://input'), true) ?: $_POST;
 $message = trim((string)($input['message'] ?? ''));
+$history = is_array($input['history'] ?? null) ? $input['history'] : [];
 
 if ($message === '') {
     echo json_encode([
@@ -28,7 +29,7 @@ if ($message === '') {
 
 try {
     $service = new ChatService();
-    $result = $service->ask($message);
+    $result = $service->ask($message, $history);
 
     echo json_encode([
         'success' => true,

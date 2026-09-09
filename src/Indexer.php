@@ -9,12 +9,12 @@ use Throwable;
 
 class Indexer
 {
-    private OllamaClient $ollama;
+    private AiClientInterface $ai;
     private PDO $localPdo;
 
-    public function __construct(?OllamaClient $ollama = null)
+    public function __construct(?AiClientInterface $ai = null)
     {
-        $this->ollama = $ollama ?? new OllamaClient();
+        $this->ai = $ai ?? AiFactory::getClient();
         $this->localPdo = Database::getLocalPdo();
     }
 
@@ -118,8 +118,8 @@ class Indexer
                 $content = "[Sumber: {$tableName}] " . implode(' | ', $fieldStrings);
 
                 try {
-                    // Jana embedding melalui Ollama embeddinggemma
-                    $vector = $this->ollama->embed($content);
+                    // Jana embedding melalui AI provider aktif (Ollama / Gemini)
+                    $vector = $this->ai->embed($content);
                     $vectorJson = json_encode($vector);
 
                     // Simpan ke pangkalan data tempatan ai_knowledge_vectors

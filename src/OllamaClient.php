@@ -5,13 +5,18 @@ namespace AiMariaDb;
 
 use RuntimeException;
 
-class OllamaClient
+class OllamaClient implements AiClientInterface
 {
     private string $host;
 
     public function __construct(?string $host = null)
     {
         $this->host = rtrim($host ?? Config::OLLAMA_HOST, '/');
+    }
+
+    public function getProviderName(): string
+    {
+        return 'ollama';
     }
 
     /**
@@ -59,7 +64,7 @@ class OllamaClient
             'input' => $text,
         ];
 
-        $response = $this->request('/api/embed', 'POST', $payload, 30);
+        $response = $this->request('/api/embed', 'POST', $payload, 90);
 
         // Semak format output Ollama (/api/embed memulangkan 'embeddings' array)
         if (!empty($response['embeddings'][0]) && is_array($response['embeddings'][0])) {
@@ -96,7 +101,7 @@ class OllamaClient
             ],
             'options' => [
                 'temperature' => 0.0, // Sifar rawak untuk jawapan 100% berpandukan fakta
-                'num_predict' => 60,  // Jawapan terus, padat & elak merapu
+                'num_predict' => 120, // Ruang mencukupi untuk ayat lengkap
             ],
         ];
 

@@ -5,15 +5,34 @@ require_once dirname(__DIR__, 2) . '/src/bootstrap.php';
 
 use AiMariaDb\Config;
 use AiMariaDb\Database;
+use AiMariaDb\AiFactory;
 use AiMariaDb\OllamaClient;
+use AiMariaDb\GeminiClient;
 
-$ollama = new OllamaClient();
+$settings = Config::getSettings();
+$activeProvider = Config::getAiProvider();
+
+$ollama = AiFactory::getOllamaClient();
 $ollamaOnline = $ollama->isAvailable();
 $ollamaModels = $ollamaOnline ? $ollama->listModels() : [];
+
+$gemini = AiFactory::getGeminiClient();
+$geminiApiKeySet = !empty($settings['gemini_api_key']);
+$geminiOnline = $geminiApiKeySet ? $gemini->isAvailable() : false;
 
 $pdo = Database::getLocalPdo();
 $connCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_db_connections")->fetchColumn();
 $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fetchColumn();
+
+function maskApiKey(string $key): string
+{
+    $key = trim($key);
+    $len = strlen($key);
+    if ($len <= 8) {
+        return $len > 0 ? str_repeat('*', $len) : '';
+    }
+    return substr($key, 0, 6) . '...' . substr($key, -4);
+}
 ?>
 <!DOCTYPE html>
 <html lang="ms">
@@ -451,6 +470,71 @@ $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fe
         #toast.show {
             transform: translateX(-50%) translateY(0);
         }
+
+        /* Responsive Mobile Styles */
+        @media (max-width: 768px) {
+            header {
+                padding: 14px 16px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .server-status {
+                width: 100%;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .status-pill {
+                font-size: 11.5px;
+                padding: 5px 10px;
+            }
+
+            .container {
+                padding: 16px 12px;
+                gap: 18px;
+            }
+
+            .metric-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .card {
+                padding: 18px 14px;
+                border-radius: 14px;
+                gap: 16px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .code-box {
+                font-size: 11px;
+                padding: 12px;
+            }
+
+            .copy-btn {
+                position: static;
+                margin-top: 8px;
+                width: 100%;
+                text-align: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -465,15 +549,16 @@ $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fe
         </div>
 
         <div class="server-status">
-            <div class="status-pill">
-                <span class="dot <?= $ollamaOnline ? 'dot-green' : 'dot-red' ?>"></span>
-                <span>Ollama: <?= $ollamaOnline ? 'Aktif' : 'Tidak Ditemui' ?></span>
+            <div class="status-pill" id="pill-provider" style="border-color: rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.1);">
+                <span>AI Aktif: <strong style="color: #a5b4fc; text-transform: uppercase;" id="header-active-provider"><?= htmlspecialchars($activeProvider) ?></strong></span>
             </div>
-            <div class="status-pill">
-                <span>Embedding: <strong><?= htmlspecialchars(Config::EMBEDDING_MODEL) ?></strong></span>
+            <div class="status-pill" id="pill-ollama">
+                <span class="dot <?= $ollamaOnline ? 'dot-green' : 'dot-red' ?>" id="header-ollama-dot"></span>
+                <span id="header-ollama-text">Ollama: <?= $ollamaOnline ? 'Aktif' : 'Tidak Ditemui' ?></span>
             </div>
-            <div class="status-pill">
-                <span>Chat LLM: <strong><?= htmlspecialchars(Config::CHAT_MODEL) ?></strong></span>
+            <div class="status-pill" id="pill-gemini">
+                <span class="dot <?= $geminiOnline ? 'dot-green' : ($geminiApiKeySet ? 'dot-red' : '') ?>" style="<?= !$geminiApiKeySet ? 'background: #64748b;' : '' ?>" id="header-gemini-dot"></span>
+                <span id="header-gemini-text">Gemini: <?= $geminiOnline ? 'Aktif' : ($geminiApiKeySet ? 'Ralat Sambungan' : 'Tiada Kunci') ?></span>
             </div>
             <a href="/demo_site.php" target="_blank" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12.5px;">
                 👁️ Buka Demo Web
@@ -501,14 +586,123 @@ $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fe
 
         <div class="main-layout">
             
-            <!-- Bahagian Kiri: Konfigurasi Database & Pilihan Jadual -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span>🔌 Sambung Database Sistem Luar</span>
+            <!-- Bahagian Kiri: Konfigurasi AI & Database -->
+            <div style="display: flex; flex-direction: column; gap: 28px;">
+
+                <!-- Kad Konfigurasi AI Provider (Ollama & Google Gemini) -->
+                <div class="card" id="ai-settings-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span>🤖 Konfigurasi Pelayan AI</span>
+                        </div>
+                        <span class="badge" id="ai-active-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
+                            <?= strtoupper(htmlspecialchars($activeProvider)) ?> AKTIF
+                        </span>
                     </div>
-                    <span style="font-size: 12px; color: var(--text-muted);">Hanya Capaian Read-Only</span>
+
+                    <form id="ai-provider-form" onsubmit="return false;">
+                        <div class="form-group">
+                            <label>Pilih Pembekal AI Utama</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px;">
+                                <label style="display: flex; align-items: center; gap: 10px; background: var(--bg-input); border: 1px solid <?= $activeProvider === 'ollama' ? 'var(--accent-indigo)' : 'var(--border-color)' ?>; border-radius: 12px; padding: 12px 16px; cursor: pointer; transition: all 0.2s;" id="label-prov-ollama">
+                                    <input type="radio" name="ai_provider" value="ollama" <?= $activeProvider === 'ollama' ? 'checked' : '' ?> onchange="onProviderChange()">
+                                    <div>
+                                        <div style="font-weight: 700; font-size: 13.5px; color: #fff;">🖥️ Ollama</div>
+                                        <div style="font-size: 11.5px; color: var(--text-muted);">Tempatan / Privasi Penuh</div>
+                                    </div>
+                                </label>
+
+                                <label style="display: flex; align-items: center; gap: 10px; background: var(--bg-input); border: 1px solid <?= $activeProvider === 'gemini' ? 'var(--accent-indigo)' : 'var(--border-color)' ?>; border-radius: 12px; padding: 12px 16px; cursor: pointer; transition: all 0.2s;" id="label-prov-gemini">
+                                    <input type="radio" name="ai_provider" value="gemini" <?= $activeProvider === 'gemini' ? 'checked' : '' ?> onchange="onProviderChange()">
+                                    <div>
+                                        <div style="font-weight: 700; font-size: 13.5px; color: #fff;">☁️ Google Gemini</div>
+                                        <div style="font-size: 11.5px; color: var(--text-muted);">Cloud AI / Gemini API Key</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Tetapan Google Gemini -->
+                        <div id="gemini-config-section" style="display: <?= $activeProvider === 'gemini' ? 'block' : 'none' ?>; margin-top: 14px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <span style="font-weight: 700; font-size: 13px; color: #93c5fd;">🔑 Tetapan Google Gemini API</span>
+                                <span id="gemini-status-indicator" style="font-size: 11.5px; font-weight: 600; color: <?= $geminiOnline ? '#10b981' : ($geminiApiKeySet ? '#f43f5e' : '#94a3b8') ?>;">
+                                    <?= $geminiOnline ? '● Bersambung' : ($geminiApiKeySet ? '● Ralat Sambungan' : '○ Kunci Diperlukan') ?>
+                                </span>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Gemini API Key</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="password" id="gemini_api_key" placeholder="Masukkan Google Gemini API Key (AIzaSy...)" value="<?= htmlspecialchars(!empty($settings['gemini_api_key']) ? maskApiKey($settings['gemini_api_key']) : '') ?>" style="flex: 1;">
+                                    <button type="button" class="btn btn-secondary" onclick="toggleApiKeyVisibility()" style="padding: 0 12px;" title="Tunjuk/Sembunyi Kunci">👁️</button>
+                                    <button type="button" class="btn btn-secondary" onclick="testGeminiConnection()" style="padding: 0 14px; font-size: 12.5px;" id="btn-test-gemini">🧪 Uji Kunci</button>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">Dapatkan API key percuma dari <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #60a5fa; text-decoration: underline;">Google AI Studio</a>.</span>
+                            </div>
+
+                            <div class="form-row" style="margin-top: 12px;">
+                                <div class="form-group">
+                                    <label>Model Chat LLM</label>
+                                    <select id="gemini_chat_model">
+                                        <option value="gemini-2.5-flash" <?= ($settings['gemini_chat_model'] ?? '') === 'gemini-2.5-flash' ? 'selected' : '' ?>>gemini-2.5-flash (Pantas & Disyorkan)</option>
+                                        <option value="gemini-flash-latest" <?= ($settings['gemini_chat_model'] ?? '') === 'gemini-flash-latest' ? 'selected' : '' ?>>gemini-flash-latest</option>
+                                        <option value="gemini-2.5-pro" <?= ($settings['gemini_chat_model'] ?? '') === 'gemini-2.5-pro' ? 'selected' : '' ?>>gemini-2.5-pro (Tinggi Kompleksiti)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Model Embedding (Vektor)</label>
+                                    <input type="text" id="gemini_embedding_model" value="<?= htmlspecialchars($settings['gemini_embedding_model'] ?? 'gemini-embedding-001') ?>" readonly style="opacity: 0.85;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tetapan Ollama -->
+                        <div id="ollama-config-section" style="display: <?= $activeProvider === 'ollama' ? 'block' : 'none' ?>; margin-top: 14px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <span style="font-weight: 700; font-size: 13px; color: #a5b4fc;">💻 Tetapan Pelayan Ollama</span>
+                                <span id="ollama-status-indicator" style="font-size: 11.5px; font-weight: 600; color: <?= $ollamaOnline ? '#10b981' : '#f43f5e' ?>;">
+                                    <?= $ollamaOnline ? '● Berjalan' : '○ Tidak Ditemui' ?>
+                                </span>
+                            </div>
+
+                            <div class="form-group">
+                                <label>URL Pelayan Ollama</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="ollama_host" value="<?= htmlspecialchars($settings['ollama_host'] ?? Config::OLLAMA_HOST) ?>" style="flex: 1;">
+                                    <button type="button" class="btn btn-secondary" onclick="testOllamaConnection()" style="padding: 0 14px; font-size: 12.5px;" id="btn-test-ollama">🧪 Uji Sambungan</button>
+                                </div>
+                            </div>
+
+                            <div class="form-row" style="margin-top: 12px;">
+                                <div class="form-group">
+                                    <label>Model Chat LLM</label>
+                                    <input type="text" id="ollama_chat_model" value="<?= htmlspecialchars($settings['ollama_chat_model'] ?? Config::CHAT_MODEL) ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label>Model Embedding</label>
+                                    <input type="text" id="ollama_embedding_model" value="<?= htmlspecialchars($settings['ollama_embedding_model'] ?? Config::EMBEDDING_MODEL) ?>">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 18px; display: flex; gap: 12px; align-items: center;">
+                            <button type="button" class="btn btn-primary" id="btn-save-ai-settings" onclick="saveAiSettings()" style="padding: 10px 20px;">
+                                💾 Simpan Tetapan AI
+                            </button>
+                            <span id="ai-settings-msg" style="font-size: 12px; color: var(--text-muted);"></span>
+                        </div>
+                    </form>
                 </div>
+
+                <!-- Bahagian Sambungan Database Sistem Luar -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span>🔌 Sambung Database Sistem Luar</span>
+                        </div>
+                        <span style="font-size: 12px; color: var(--text-muted);">Hanya Capaian Read-Only</span>
+                    </div>
 
                 <form id="db-form" onsubmit="return false;">
                     <div class="form-row">
@@ -583,7 +777,7 @@ $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fe
                     </div>
                 </div>
 
-            </div>
+            </div><!-- /left column -->
 
             <!-- Bahagian Kanan: Live Chat Tester & Embed Snippet -->
             <div style="display: flex; flex-direction: column; gap: 28px;">
@@ -641,6 +835,152 @@ $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fe
     <div id="toast"></div>
 
     <script>
+        function onProviderChange() {
+            const prov = document.querySelector('input[name="ai_provider"]:checked')?.value || 'ollama';
+            const gemSec = document.getElementById('gemini-config-section');
+            const ollSec = document.getElementById('ollama-config-section');
+            const lblOllama = document.getElementById('label-prov-ollama');
+            const lblGemini = document.getElementById('label-prov-gemini');
+
+            if (prov === 'gemini') {
+                gemSec.style.display = 'block';
+                ollSec.style.display = 'none';
+                lblGemini.style.borderColor = 'var(--accent-indigo)';
+                lblOllama.style.borderColor = 'var(--border-color)';
+            } else {
+                gemSec.style.display = 'none';
+                ollSec.style.display = 'block';
+                lblOllama.style.borderColor = 'var(--accent-indigo)';
+                lblGemini.style.borderColor = 'var(--border-color)';
+            }
+        }
+
+        function toggleApiKeyVisibility() {
+            const input = document.getElementById('gemini_api_key');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        async function testGeminiConnection() {
+            const btn = document.getElementById('btn-test-gemini');
+            const key = document.getElementById('gemini_api_key').value.trim();
+            const ind = document.getElementById('gemini-status-indicator');
+
+            btn.disabled = true;
+            btn.textContent = 'Menguji...';
+
+            try {
+                const res = await fetch('/api/settings.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'test_gemini',
+                        gemini_api_key: key
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    ind.style.color = '#10b981';
+                    ind.textContent = '● Bersambung';
+                    showToast('✓ ' + data.message);
+                } else {
+                    ind.style.color = '#f43f5e';
+                    ind.textContent = '● Ralat';
+                    showToast('✗ ' + data.message);
+                }
+            } catch (e) {
+                showToast('Ralat menguji Gemini: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🧪 Uji Kunci';
+            }
+        }
+
+        async function testOllamaConnection() {
+            const btn = document.getElementById('btn-test-ollama');
+            const host = document.getElementById('ollama_host').value.trim();
+            const ind = document.getElementById('ollama-status-indicator');
+
+            btn.disabled = true;
+            btn.textContent = 'Menguji...';
+
+            try {
+                const res = await fetch('/api/settings.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'test_ollama',
+                        ollama_host: host
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    ind.style.color = '#10b981';
+                    ind.textContent = '● Berjalan';
+                    showToast('✓ ' + data.message);
+                } else {
+                    ind.style.color = '#f43f5e';
+                    ind.textContent = '○ Gagal';
+                    showToast('✗ ' + data.message);
+                }
+            } catch (e) {
+                showToast('Ralat menguji Ollama: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🧪 Uji Sambungan';
+            }
+        }
+
+        async function saveAiSettings() {
+            const btn = document.getElementById('btn-save-ai-settings');
+            const prov = document.querySelector('input[name="ai_provider"]:checked')?.value || 'ollama';
+            const gemKey = document.getElementById('gemini_api_key').value.trim();
+            const gemChat = document.getElementById('gemini_chat_model').value;
+            const gemEmb = document.getElementById('gemini_embedding_model').value;
+            const ollHost = document.getElementById('ollama_host').value.trim();
+            const ollChat = document.getElementById('ollama_chat_model').value.trim();
+            const ollEmb = document.getElementById('ollama_embedding_model').value.trim();
+
+            btn.disabled = true;
+            btn.textContent = 'Menyimpan...';
+
+            try {
+                const res = await fetch('/api/settings.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'save',
+                        provider: prov,
+                        gemini_api_key: gemKey,
+                        gemini_chat_model: gemChat,
+                        gemini_embedding_model: gemEmb,
+                        ollama_host: ollHost,
+                        ollama_chat_model: ollChat,
+                        ollama_embedding_model: ollEmb
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✓ Tetapan AI berjaya disimpan!');
+                    document.getElementById('ai-active-badge').textContent = prov.toUpperCase() + ' AKTIF';
+                    document.getElementById('header-active-provider').textContent = prov.toUpperCase();
+                    
+                    // Kemaskini teks pada butang jana vektor di bawah
+                    const syncBtn = document.getElementById('btn-save-sync');
+                    if (syncBtn) {
+                        const modelName = prov === 'gemini' ? gemEmb : ollEmb;
+                        syncBtn.textContent = `🚀 Simpan & Jana Vektor AI (${modelName})`;
+                    }
+                } else {
+                    showToast('Ralat: ' + (data.error || 'Gagal menyimpan'));
+                }
+            } catch (e) {
+                showToast('Ralat menyimpan: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💾 Simpan Tetapan AI';
+            }
+        }
+
         function toggleDriverFields() {
             const driver = document.getElementById('db_driver').value;
             const mysqlFields = document.getElementById('mysql-fields');
@@ -820,10 +1160,16 @@ $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fe
                 progressBox.innerHTML += `<div style="color: #fb7185;">RALAT: ${err.message}</div>`;
                 showToast('Ralat: ' + err.message);
             } finally {
-                btn.textContent = '🚀 Simpan & Jana Vektor AI (embeddinggemma)';
+                const prov = document.querySelector('input[name="ai_provider"]:checked')?.value || 'ollama';
+                const modelName = prov === 'gemini' 
+                    ? document.getElementById('gemini_embedding_model').value 
+                    : document.getElementById('ollama_embedding_model').value;
+                btn.textContent = `🚀 Simpan & Jana Vektor AI (${modelName})`;
                 btn.disabled = false;
             }
         }
+
+        const adminChatHistory = [];
 
         async function sendAdminChat() {
             const input = document.getElementById('admin-chat-input');
@@ -844,14 +1190,26 @@ $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fe
             logs.appendChild(botMsg);
             logs.scrollTop = logs.scrollHeight;
 
+            const historyPayload = adminChatHistory.slice(-6);
+            adminChatHistory.push({ role: 'user', content: q });
+
             try {
                 const res = await fetch('/api/chat.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: q }),
+                    body: JSON.stringify({ 
+                        message: q,
+                        history: historyPayload
+                    }),
                 });
                 const data = await res.json();
                 botMsg.textContent = data.answer || 'Tiada maklumat.';
+                if (data.answer) {
+                    adminChatHistory.push({ role: 'assistant', content: data.answer });
+                    if (adminChatHistory.length > 10) {
+                        adminChatHistory.splice(0, adminChatHistory.length - 10);
+                    }
+                }
             } catch (e) {
                 botMsg.textContent = 'Ralat menghubungi API chatbot.';
             }
@@ -867,6 +1225,19 @@ $vectorCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_knowledge_vectors")->fe
 
         // Jalankan permulaan secara automatik dengan memuat turun dummy database sekiranya ada
         window.addEventListener('DOMContentLoaded', () => {
+            // Tetapkan provider aktif
+            onProviderChange();
+
+            // Kemaskini label butang jana vektor
+            const prov = document.querySelector('input[name="ai_provider"]:checked')?.value || 'ollama';
+            const modelName = prov === 'gemini' 
+                ? document.getElementById('gemini_embedding_model')?.value || 'gemini-embedding-001'
+                : document.getElementById('ollama_embedding_model')?.value || 'embeddinggemma';
+            const syncBtn = document.getElementById('btn-save-sync');
+            if (syncBtn) {
+                syncBtn.textContent = `🚀 Simpan & Jana Vektor AI (${modelName})`;
+            }
+
             // Pilih SQLite secara lalai untuk memudahkan demonstrasi segera
             document.getElementById('db_driver').value = 'sqlite';
             toggleDriverFields();
