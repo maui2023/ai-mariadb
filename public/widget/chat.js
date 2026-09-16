@@ -58,6 +58,369 @@
     const widgetTitle = currentScript?.getAttribute('data-title') || 'Pembantu Kedai AI';
     const widgetGreeting = currentScript?.getAttribute('data-greeting') || 'Hai! 👋 Selamat datang. Ada apa yang boleh saya bantu mengenai produk, harga, atau promosi kami?';
     const customChipsAttr = currentScript?.getAttribute('data-chips');
+    const themeAttr = currentScript?.getAttribute('data-theme') || (typeof window !== 'undefined' && window.AI_CHAT_THEME) || 'purple';
+    const colorAttr = currentScript?.getAttribute('data-color') || currentScript?.getAttribute('data-primary') || (typeof window !== 'undefined' && window.AI_CHAT_COLOR);
+    const headerAttr = currentScript?.getAttribute('data-header') || (typeof window !== 'undefined' && window.AI_CHAT_HEADER);
+    const modeAttr = currentScript?.getAttribute('data-mode') || (typeof window !== 'undefined' && window.AI_CHAT_MODE) || 'light';
+
+    // Helper warna untuk menjana variasi tema dinamik
+    function adjustHex(hex, percent) {
+        hex = hex.replace(/^#/, '');
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        const num = parseInt(hex, 16);
+        let r = (num >> 16) + Math.round(255 * (percent / 100));
+        let g = ((num >> 8) & 0x00FF) + Math.round(255 * (percent / 100));
+        let b = (num & 0x0000FF) + Math.round(255 * (percent / 100));
+        r = Math.min(255, Math.max(0, r));
+        g = Math.min(255, Math.max(0, g));
+        b = Math.min(255, Math.max(0, b));
+        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+    }
+
+    function isColorDark(hex) {
+        hex = hex.replace(/^#/, '');
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        const num = parseInt(hex, 16);
+        const r = (num >> 16);
+        const g = ((num >> 8) & 0x00FF);
+        const b = (num & 0x0000FF);
+        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return luma < 140;
+    }
+
+    const THEME_PRESETS = {
+        'purple': {
+            '--ai-primary': '#7c3aed',
+            '--ai-primary-hover': '#6d28d9',
+            '--ai-primary-light': '#f5f3ff',
+            '--ai-header-bg': 'linear-gradient(135deg, #9333ea 0%, #7c3aed 55%, #6366f1 100%)',
+            '--ai-header-text': '#ffffff',
+            '--ai-header-border': 'rgba(255, 255, 255, 0.15)',
+            '--ai-header-shadow': '0 4px 16px rgba(109, 40, 217, 0.2)',
+            '--ai-bubble-bg': 'linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #6366f1 100%)',
+            '--ai-bubble-shadow': '0 12px 28px -4px rgba(124, 58, 237, 0.5), 0 6px 14px -3px rgba(99, 102, 241, 0.35)',
+            '--ai-bubble-hover-shadow': '0 16px 34px -4px rgba(124, 58, 237, 0.65)',
+            '--ai-teaser-bg': '#ffffff',
+            '--ai-teaser-text': '#6d28d9',
+            '--ai-teaser-border': '#ede9fe',
+            '--ai-teaser-shadow': '0 8px 24px -4px rgba(109, 40, 217, 0.22), 0 2px 6px rgba(0, 0, 0, 0.04)',
+            '--ai-window-bg': '#ffffff',
+            '--ai-messages-bg': '#f8fafc',
+            '--ai-bot-bubble-bg': '#ffffff',
+            '--ai-bot-bubble-text': '#1e293b',
+            '--ai-bot-bubble-border': '#e2e8f0',
+            '--ai-user-bubble-bg': 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+            '--ai-user-bubble-text': '#ffffff',
+            '--ai-user-bubble-shadow': '0 6px 16px -4px rgba(109, 40, 217, 0.35)',
+            '--ai-section-bg': '#f5f3ff',
+            '--ai-section-border': '#ede9fe',
+            '--ai-section-text': '#6d28d9',
+            '--ai-bullet-color': '#8b5cf6',
+            '--ai-chip-bg': '#ffffff',
+            '--ai-chip-text': '#6d28d9',
+            '--ai-chip-border': '#ddd6fe',
+            '--ai-chip-hover-bg': '#f5f3ff',
+            '--ai-chip-hover-text': '#5b21b6',
+            '--ai-chip-hover-border': '#c4b5fd',
+            '--ai-typing-dot': '#8b5cf6',
+            '--ai-input-focus-border': '#8b5cf6',
+            '--ai-input-focus-ring': 'rgba(139, 92, 246, 0.15)',
+            '--ai-send-btn-bg': 'linear-gradient(135deg, #a855f7, #6d28d9)',
+            '--ai-send-btn-shadow': '0 4px 12px rgba(109, 40, 217, 0.35)',
+            '--ai-footer-icon': '#8b5cf6',
+        },
+        'gold-black': {
+            '--ai-primary': '#d4af37',
+            '--ai-primary-hover': '#b8860b',
+            '--ai-primary-light': '#fdf8e6',
+            '--ai-header-bg': 'linear-gradient(135deg, #18181b 0%, #09090b 60%, #1c1917 100%)',
+            '--ai-header-text': '#fef08a',
+            '--ai-header-border': 'rgba(212, 175, 55, 0.4)',
+            '--ai-header-shadow': '0 4px 16px rgba(0, 0, 0, 0.4)',
+            '--ai-bubble-bg': 'linear-gradient(135deg, #f59e0b 0%, #d97706 40%, #18181b 100%)',
+            '--ai-bubble-shadow': '0 12px 28px -4px rgba(217, 119, 6, 0.5), 0 6px 14px -3px rgba(0, 0, 0, 0.5)',
+            '--ai-bubble-hover-shadow': '0 16px 34px -4px rgba(217, 119, 6, 0.7)',
+            '--ai-teaser-bg': '#18181b',
+            '--ai-teaser-text': '#fef08a',
+            '--ai-teaser-border': '#ca8a04',
+            '--ai-teaser-shadow': '0 8px 24px -4px rgba(202, 138, 4, 0.25)',
+            '--ai-window-bg': '#ffffff',
+            '--ai-messages-bg': '#fafaf9',
+            '--ai-bot-bubble-bg': '#ffffff',
+            '--ai-bot-bubble-text': '#1c1917',
+            '--ai-bot-bubble-border': '#e7e5e4',
+            '--ai-bot-avatar-bg': 'linear-gradient(135deg, #fef9c3, #fde047)',
+            '--ai-bot-avatar-border': '#eab308',
+            '--ai-bot-avatar-row-bg': 'linear-gradient(135deg, #fef9c3, #fef08a)',
+            '--ai-bot-avatar-row-border': '#ca8a04',
+            '--ai-user-bubble-bg': 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)',
+            '--ai-user-bubble-text': '#0a0a0a',
+            '--ai-user-bubble-shadow': '0 6px 16px -4px rgba(202, 138, 4, 0.45)',
+            '--ai-section-bg': '#fefce8',
+            '--ai-section-border': '#fef08a',
+            '--ai-section-text': '#854d0e',
+            '--ai-bullet-color': '#d97706',
+            '--ai-chip-bg': '#ffffff',
+            '--ai-chip-text': '#854d0e',
+            '--ai-chip-border': '#fef08a',
+            '--ai-chip-hover-bg': '#fefce8',
+            '--ai-chip-hover-text': '#713f12',
+            '--ai-chip-hover-border': '#fde047',
+            '--ai-typing-dot': '#d97706',
+            '--ai-input-focus-border': '#d4af37',
+            '--ai-input-focus-ring': 'rgba(212, 175, 55, 0.25)',
+            '--ai-send-btn-bg': 'linear-gradient(135deg, #f59e0b, #b45309)',
+            '--ai-send-btn-shadow': '0 4px 12px rgba(217, 119, 6, 0.45)',
+            '--ai-send-btn-hover-shadow': '0 6px 16px rgba(217, 119, 6, 0.6)',
+            '--ai-footer-icon': '#d4af37',
+        },
+        'black-red': {
+            '--ai-primary': '#ef4444',
+            '--ai-primary-hover': '#dc2626',
+            '--ai-primary-light': '#fef2f2',
+            '--ai-header-bg': 'linear-gradient(135deg, #18181b 0%, #09090b 50%, #450a0a 100%)',
+            '--ai-header-text': '#ffffff',
+            '--ai-header-border': 'rgba(239, 68, 68, 0.4)',
+            '--ai-header-shadow': '0 4px 16px rgba(0, 0, 0, 0.4)',
+            '--ai-bubble-bg': 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #18181b 100%)',
+            '--ai-bubble-shadow': '0 12px 28px -4px rgba(220, 38, 38, 0.5), 0 6px 14px -3px rgba(0, 0, 0, 0.5)',
+            '--ai-bubble-hover-shadow': '0 16px 34px -4px rgba(220, 38, 38, 0.7)',
+            '--ai-teaser-bg': '#18181b',
+            '--ai-teaser-text': '#f87171',
+            '--ai-teaser-border': '#b91c1c',
+            '--ai-teaser-shadow': '0 8px 24px -4px rgba(220, 38, 38, 0.25)',
+            '--ai-window-bg': '#ffffff',
+            '--ai-messages-bg': '#fdf2f2',
+            '--ai-bot-bubble-bg': '#ffffff',
+            '--ai-bot-bubble-text': '#1e293b',
+            '--ai-bot-bubble-border': '#fee2e2',
+            '--ai-bot-avatar-bg': 'linear-gradient(135deg, #fee2e2, #fecaca)',
+            '--ai-bot-avatar-border': '#f87171',
+            '--ai-bot-avatar-row-bg': 'linear-gradient(135deg, #fee2e2, #fecaca)',
+            '--ai-bot-avatar-row-border': '#ef4444',
+            '--ai-user-bubble-bg': 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+            '--ai-user-bubble-text': '#ffffff',
+            '--ai-user-bubble-shadow': '0 6px 16px -4px rgba(220, 38, 38, 0.45)',
+            '--ai-section-bg': '#fee2e2',
+            '--ai-section-border': '#fecaca',
+            '--ai-section-text': '#b91c1c',
+            '--ai-bullet-color': '#dc2626',
+            '--ai-chip-bg': '#ffffff',
+            '--ai-chip-text': '#b91c1c',
+            '--ai-chip-border': '#fecaca',
+            '--ai-chip-hover-bg': '#fef2f2',
+            '--ai-chip-hover-text': '#991b1b',
+            '--ai-chip-hover-border': '#fca5a5',
+            '--ai-typing-dot': '#dc2626',
+            '--ai-input-focus-border': '#ef4444',
+            '--ai-input-focus-ring': 'rgba(239, 68, 68, 0.2)',
+            '--ai-send-btn-bg': 'linear-gradient(135deg, #ef4444, #b91c1c)',
+            '--ai-send-btn-shadow': '0 4px 12px rgba(220, 38, 38, 0.45)',
+            '--ai-send-btn-hover-shadow': '0 6px 16px rgba(220, 38, 38, 0.6)',
+            '--ai-footer-icon': '#ef4444',
+        },
+        'emerald': {
+            '--ai-primary': '#059669',
+            '--ai-primary-hover': '#047857',
+            '--ai-primary-light': '#ecfdf5',
+            '--ai-header-bg': 'linear-gradient(135deg, #059669 0%, #047857 55%, #065f46 100%)',
+            '--ai-header-text': '#ffffff',
+            '--ai-header-border': 'rgba(255, 255, 255, 0.18)',
+            '--ai-bubble-bg': 'linear-gradient(135deg, #34d399 0%, #059669 50%, #047857 100%)',
+            '--ai-bubble-shadow': '0 12px 28px -4px rgba(5, 150, 105, 0.5), 0 6px 14px -3px rgba(4, 120, 87, 0.35)',
+            '--ai-teaser-text': '#047857',
+            '--ai-teaser-border': '#a7f3d0',
+            '--ai-user-bubble-bg': 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
+            '--ai-user-bubble-text': '#ffffff',
+            '--ai-user-bubble-shadow': '0 6px 16px -4px rgba(5, 150, 105, 0.4)',
+            '--ai-bot-avatar-bg': 'linear-gradient(135deg, #d1fae5, #a7f3d0)',
+            '--ai-bot-avatar-border': '#34d399',
+            '--ai-bot-avatar-row-bg': 'linear-gradient(135deg, #d1fae5, #a7f3d0)',
+            '--ai-bot-avatar-row-border': '#10b981',
+            '--ai-section-bg': '#ecfdf5',
+            '--ai-section-border': '#a7f3d0',
+            '--ai-section-text': '#047857',
+            '--ai-bullet-color': '#059669',
+            '--ai-chip-bg': '#ffffff',
+            '--ai-chip-text': '#047857',
+            '--ai-chip-border': '#a7f3d0',
+            '--ai-chip-hover-bg': '#ecfdf5',
+            '--ai-chip-hover-text': '#065f46',
+            '--ai-typing-dot': '#059669',
+            '--ai-input-focus-border': '#059669',
+            '--ai-input-focus-ring': 'rgba(5, 150, 105, 0.18)',
+            '--ai-send-btn-bg': 'linear-gradient(135deg, #10b981, #047857)',
+            '--ai-send-btn-shadow': '0 4px 12px rgba(5, 150, 105, 0.4)',
+            '--ai-footer-icon': '#059669',
+        },
+        'blue': {
+            '--ai-primary': '#2563eb',
+            '--ai-primary-hover': '#1d4ed8',
+            '--ai-primary-light': '#eff6ff',
+            '--ai-header-bg': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 55%, #1e40af 100%)',
+            '--ai-header-text': '#ffffff',
+            '--ai-bubble-bg': 'linear-gradient(135deg, #60a5fa 0%, #2563eb 50%, #1d4ed8 100%)',
+            '--ai-bubble-shadow': '0 12px 28px -4px rgba(37, 99, 235, 0.5), 0 6px 14px -3px rgba(29, 78, 216, 0.35)',
+            '--ai-teaser-text': '#1d4ed8',
+            '--ai-teaser-border': '#bfdbfe',
+            '--ai-user-bubble-bg': 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+            '--ai-user-bubble-text': '#ffffff',
+            '--ai-user-bubble-shadow': '0 6px 16px -4px rgba(37, 99, 235, 0.4)',
+            '--ai-bot-avatar-bg': 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
+            '--ai-bot-avatar-border': '#60a5fa',
+            '--ai-bot-avatar-row-bg': 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
+            '--ai-bot-avatar-row-border': '#3b82f6',
+            '--ai-section-bg': '#eff6ff',
+            '--ai-section-border': '#bfdbfe',
+            '--ai-section-text': '#1d4ed8',
+            '--ai-bullet-color': '#2563eb',
+            '--ai-chip-bg': '#ffffff',
+            '--ai-chip-text': '#1d4ed8',
+            '--ai-chip-border': '#bfdbfe',
+            '--ai-chip-hover-bg': '#eff6ff',
+            '--ai-chip-hover-text': '#1e40af',
+            '--ai-typing-dot': '#2563eb',
+            '--ai-input-focus-border': '#2563eb',
+            '--ai-input-focus-ring': 'rgba(37, 99, 235, 0.18)',
+            '--ai-send-btn-bg': 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+            '--ai-send-btn-shadow': '0 4px 12px rgba(37, 99, 235, 0.4)',
+            '--ai-footer-icon': '#2563eb',
+        },
+        'orange': {
+            '--ai-primary': '#ea580c',
+            '--ai-primary-hover': '#c2410c',
+            '--ai-primary-light': '#fff7ed',
+            '--ai-header-bg': 'linear-gradient(135deg, #f97316 0%, #ea580c 55%, #9a3412 100%)',
+            '--ai-header-text': '#ffffff',
+            '--ai-bubble-bg': 'linear-gradient(135deg, #fb923c 0%, #ea580c 50%, #c2410c 100%)',
+            '--ai-bubble-shadow': '0 12px 28px -4px rgba(234, 88, 12, 0.5)',
+            '--ai-teaser-text': '#c2410c',
+            '--ai-teaser-border': '#fed7aa',
+            '--ai-user-bubble-bg': 'linear-gradient(135deg, #f97316 0%, #c2410c 100%)',
+            '--ai-user-bubble-text': '#ffffff',
+            '--ai-user-bubble-shadow': '0 6px 16px -4px rgba(234, 88, 12, 0.4)',
+            '--ai-section-bg': '#fff7ed',
+            '--ai-section-border': '#fed7aa',
+            '--ai-section-text': '#c2410c',
+            '--ai-bullet-color': '#ea580c',
+            '--ai-chip-bg': '#ffffff',
+            '--ai-chip-text': '#c2410c',
+            '--ai-chip-border': '#fed7aa',
+            '--ai-chip-hover-bg': '#fff7ed',
+            '--ai-chip-hover-text': '#9a3412',
+            '--ai-typing-dot': '#ea580c',
+            '--ai-input-focus-border': '#ea580c',
+            '--ai-input-focus-ring': 'rgba(234, 88, 12, 0.18)',
+            '--ai-send-btn-bg': 'linear-gradient(135deg, #f97316, #c2410c)',
+            '--ai-send-btn-shadow': '0 4px 12px rgba(234, 88, 12, 0.4)',
+            '--ai-footer-icon': '#ea580c',
+        },
+        'dark': {
+            '--ai-primary': '#60a5fa',
+            '--ai-primary-hover': '#3b82f6',
+            '--ai-primary-light': '#27272a',
+            '--ai-window-bg': '#18181b',
+            '--ai-window-shadow': '0 24px 60px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+            '--ai-messages-bg': '#09090b',
+            '--ai-header-bg': 'linear-gradient(135deg, #27272a 0%, #18181b 100%)',
+            '--ai-header-text': '#ffffff',
+            '--ai-header-border': 'rgba(255, 255, 255, 0.1)',
+            '--ai-bubble-bg': 'linear-gradient(135deg, #3f3f46 0%, #27272a 50%, #18181b 100%)',
+            '--ai-bubble-shadow': '0 12px 28px -4px rgba(0, 0, 0, 0.6)',
+            '--ai-teaser-bg': '#18181b',
+            '--ai-teaser-text': '#f4f4f5',
+            '--ai-teaser-border': '#3f3f46',
+            '--ai-bot-bubble-bg': '#18181b',
+            '--ai-bot-bubble-text': '#f4f4f5',
+            '--ai-bot-bubble-border': '#27272a',
+            '--ai-bot-avatar-bg': '#27272a',
+            '--ai-bot-avatar-border': '#3f3f46',
+            '--ai-bot-avatar-row-bg': '#27272a',
+            '--ai-bot-avatar-row-border': '#3f3f46',
+            '--ai-user-bubble-bg': 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+            '--ai-user-bubble-text': '#ffffff',
+            '--ai-chip-bg': '#18181b',
+            '--ai-chip-text': '#e4e4e7',
+            '--ai-chip-border': '#27272a',
+            '--ai-chip-hover-bg': '#27272a',
+            '--ai-chip-hover-text': '#ffffff',
+            '--ai-input-container-bg': '#18181b',
+            '--ai-input-container-border': '#27272a',
+            '--ai-input-box-bg': '#09090b',
+            '--ai-input-box-border': '#27272a',
+            '--ai-input-focus-bg': '#09090b',
+            '--ai-input-text': '#ffffff',
+            '--ai-input-placeholder': '#71717a',
+            '--ai-send-btn-bg': 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+            '--ai-section-bg': '#27272a',
+            '--ai-section-border': '#3f3f46',
+            '--ai-section-text': '#60a5fa',
+            '--ai-bullet-color': '#60a5fa',
+            '--ai-footer-icon': '#60a5fa',
+            '--ai-footer-text': '#71717a',
+        }
+    };
+
+    function buildCustomTheme(hex, headerColor = null, isDarkMode = false) {
+        if (!hex.startsWith('#')) hex = '#' + hex;
+        const lighter = adjustHex(hex, 18);
+        const darker = adjustHex(hex, -20);
+        const ultraLight = isDarkMode ? '#1e293b' : adjustHex(hex, 88);
+        const textColor = isColorDark(hex) ? '#ffffff' : '#0a0a0a';
+        
+        let headerBg = `linear-gradient(135deg, ${lighter} 0%, ${hex} 55%, ${darker} 100%)`;
+        let headerText = '#ffffff';
+        if (headerColor) {
+            headerBg = headerColor.includes('gradient') ? headerColor : `linear-gradient(135deg, ${headerColor} 0%, ${adjustHex(headerColor, -15)} 100%)`;
+            headerText = isColorDark(headerColor) ? '#ffffff' : '#0a0a0a';
+        }
+
+        const theme = {
+            '--ai-primary': hex,
+            '--ai-primary-hover': darker,
+            '--ai-primary-light': ultraLight,
+            '--ai-header-bg': headerBg,
+            '--ai-header-text': headerText,
+            '--ai-bubble-bg': `linear-gradient(135deg, ${lighter} 0%, ${hex} 50%, ${darker} 100%)`,
+            '--ai-bubble-shadow': `0 12px 28px -4px ${hex}80`,
+            '--ai-teaser-text': darker,
+            '--ai-teaser-border': adjustHex(hex, 60),
+            '--ai-user-bubble-bg': `linear-gradient(135deg, ${hex} 0%, ${darker} 100%)`,
+            '--ai-user-bubble-text': textColor,
+            '--ai-user-bubble-shadow': `0 6px 16px -4px ${hex}60`,
+            '--ai-section-bg': ultraLight,
+            '--ai-section-border': adjustHex(hex, 60),
+            '--ai-section-text': darker,
+            '--ai-bullet-color': hex,
+            '--ai-chip-text': darker,
+            '--ai-chip-border': adjustHex(hex, 50),
+            '--ai-chip-hover-bg': ultraLight,
+            '--ai-chip-hover-text': darker,
+            '--ai-typing-dot': hex,
+            '--ai-input-focus-border': hex,
+            '--ai-input-focus-ring': `${hex}25`,
+            '--ai-send-btn-bg': `linear-gradient(135deg, ${lighter}, ${hex})`,
+            '--ai-send-btn-shadow': `0 4px 12px ${hex}55`,
+            '--ai-footer-icon': hex,
+        };
+
+        if (isDarkMode) {
+            theme['--ai-window-bg'] = '#18181b';
+            theme['--ai-messages-bg'] = '#09090b';
+            theme['--ai-bot-bubble-bg'] = '#18181b';
+            theme['--ai-bot-bubble-text'] = '#f4f4f5';
+            theme['--ai-bot-bubble-border'] = '#27272a';
+            theme['--ai-input-container-bg'] = '#18181b';
+            theme['--ai-input-container-border'] = '#27272a';
+            theme['--ai-input-box-bg'] = '#09090b';
+            theme['--ai-input-box-border'] = '#27272a';
+            theme['--ai-input-focus-bg'] = '#09090b';
+            theme['--ai-input-text'] = '#ffffff';
+            theme['--ai-chip-bg'] = '#18181b';
+        }
+
+        return theme;
+    }
 
     // 2. Muat turun CSS widget secara automatik dari domain pelayan AI
     if (!document.getElementById('ai-chat-css')) {
@@ -193,6 +556,66 @@
     `;
 
     document.body.appendChild(rootContainer);
+
+    function applyTheme(themeKeyOrHex, customHeader = null, mode = 'light') {
+        if (!rootContainer) return;
+
+        let themeVars = null;
+        const normalized = (themeKeyOrHex || '').toLowerCase().trim();
+
+        if (normalized === 'gold-black' || normalized === 'black-gold' || normalized === 'gold' || normalized === 'emas') {
+            themeVars = Object.assign({}, THEME_PRESETS['gold-black']);
+        } else if (normalized === 'black-red' || normalized === 'red-black' || normalized === 'red' || normalized === 'merah') {
+            themeVars = Object.assign({}, THEME_PRESETS['black-red']);
+        } else if (normalized === 'emerald' || normalized === 'green' || normalized === 'hijau' || normalized === 'herba') {
+            themeVars = Object.assign({}, THEME_PRESETS['emerald']);
+        } else if (normalized === 'blue' || normalized === 'biru' || normalized === 'ocean' || normalized === 'corporate') {
+            themeVars = Object.assign({}, THEME_PRESETS['blue']);
+        } else if (normalized === 'orange' || normalized === 'jingga' || normalized === 'sunset') {
+            themeVars = Object.assign({}, THEME_PRESETS['orange']);
+        } else if (normalized === 'dark' || normalized === 'gelap' || normalized === 'obsidian' || normalized === 'black') {
+            themeVars = Object.assign({}, THEME_PRESETS['dark']);
+        } else if (THEME_PRESETS[normalized]) {
+            themeVars = Object.assign({}, THEME_PRESETS[normalized]);
+        } else if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(themeKeyOrHex)) {
+            themeVars = buildCustomTheme(themeKeyOrHex, customHeader, mode === 'dark');
+        } else {
+            themeVars = Object.assign({}, THEME_PRESETS['purple']);
+        }
+
+        if (customHeader) {
+            themeVars['--ai-header-bg'] = customHeader.includes('gradient') ? customHeader : `linear-gradient(135deg, ${customHeader} 0%, ${adjustHex(customHeader, -15)} 100%)`;
+            themeVars['--ai-header-text'] = isColorDark(customHeader) ? '#ffffff' : '#0a0a0a';
+        }
+
+        if (mode === 'dark' && normalized !== 'dark') {
+            themeVars['--ai-window-bg'] = '#18181b';
+            themeVars['--ai-messages-bg'] = '#09090b';
+            themeVars['--ai-bot-bubble-bg'] = '#18181b';
+            themeVars['--ai-bot-bubble-text'] = '#f4f4f5';
+            themeVars['--ai-bot-bubble-border'] = '#27272a';
+            themeVars['--ai-input-container-bg'] = '#18181b';
+            themeVars['--ai-input-container-border'] = '#27272a';
+            themeVars['--ai-input-box-bg'] = '#09090b';
+            themeVars['--ai-input-box-border'] = '#27272a';
+            themeVars['--ai-input-focus-bg'] = '#09090b';
+            themeVars['--ai-input-text'] = '#ffffff';
+            themeVars['--ai-chip-bg'] = '#18181b';
+        }
+
+        for (const [prop, val] of Object.entries(themeVars)) {
+            rootContainer.style.setProperty(prop, val);
+        }
+    }
+
+    // Terapkan tema yang dipilih pelanggan serta-merta
+    applyTheme(colorAttr || themeAttr, headerAttr, modeAttr);
+
+    // Dedahkan fungsi API global untuk laman web pelanggan menukar tema secara langsung via JS
+    if (typeof window !== 'undefined') {
+        window.AiMariaDbSetTheme = (t, h, m) => applyTheme(t, h, m);
+        window.AiMariaDbSetColor = (c, h, m) => applyTheme(c, h, m);
+    }
 
     // 4. Logik Interaksi UI & AJAX
     const chatBubble = document.getElementById('ai-chat-bubble');

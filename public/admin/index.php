@@ -864,7 +864,49 @@ function maskApiKey(string $key): string
                         </div>
                     </div>
                     
-                    <p style="font-size: 13px; color: var(--text-muted);">Salin kod di bawah dan letakkan sebelum penutup <code>&lt;/body&gt;</code> pada mana-mana website anda:</p>
+                    <p style="font-size: 13px; color: var(--text-muted);">Salin kod di bawah dan letakkan sebelum penutup <code>&lt;/body&gt;</code> pada mana-mana website anda atau website pelanggan:</p>
+
+                    <!-- Pilihan Tema & Warna (Gold+Black, Black+Red, dsb) -->
+                    <div style="margin-top: 14px; margin-bottom: 12px;">
+                        <label style="font-size: 12.5px; font-weight: 700; color: #cbd5e1; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <span>🎨 Pilih Tema Warna Chatbot:</span>
+                            <span id="current-theme-label" style="font-size: 11.5px; color: #a5b4fc; font-weight: 500;">Tema: Ungu Diraja</span>
+                        </label>
+                        <div class="theme-preset-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;">
+                            <button type="button" class="theme-btn" id="theme-btn-purple" onclick="selectEmbedTheme('purple', 'Ungu Diraja', this)" style="background: rgba(147, 51, 234, 0.15); border: 1.5px solid #a855f7; color: #e9d5ff; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #6366f1);"></span>
+                                <span>Ungu Diraja</span>
+                            </button>
+                            <button type="button" class="theme-btn" id="theme-btn-gold-black" onclick="selectEmbedTheme('gold-black', 'Emas & Hitam (Gold+Black)', this)" style="background: rgba(217, 119, 6, 0.15); border: 1.5px solid #d97706; color: #fde68a; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #18181b); border: 1px solid #d97706;"></span>
+                                <span>Gold + Black</span>
+                            </button>
+                            <button type="button" class="theme-btn" id="theme-btn-black-red" onclick="selectEmbedTheme('black-red', 'Hitam & Merah (Black+Red)', this)" style="background: rgba(220, 38, 38, 0.15); border: 1.5px solid #ef4444; color: #fecaca; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #ef4444, #09090b); border: 1px solid #ef4444;"></span>
+                                <span>Black + Red</span>
+                            </button>
+                            <button type="button" class="theme-btn" id="theme-btn-emerald" onclick="selectEmbedTheme('emerald', 'Hijau Zamrud (Herba)', this)" style="background: rgba(16, 185, 129, 0.15); border: 1.5px solid #10b981; color: #a7f3d0; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #065f46);"></span>
+                                <span>Hijau Zamrud</span>
+                            </button>
+                            <button type="button" class="theme-btn" id="theme-btn-blue" onclick="selectEmbedTheme('blue', 'Biru Korporat', this)" style="background: rgba(59, 130, 246, 0.15); border: 1.5px solid #3b82f6; color: #bfdbfe; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1e40af);"></span>
+                                <span>Biru Korporat</span>
+                            </button>
+                            <button type="button" class="theme-btn" id="theme-btn-orange" onclick="selectEmbedTheme('orange', 'Jingga Sunset', this)" style="background: rgba(249, 115, 22, 0.15); border: 1.5px solid #f97316; color: #fed7aa; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #f97316, #9a3412);"></span>
+                                <span>Jingga Sunset</span>
+                            </button>
+                            <button type="button" class="theme-btn" id="theme-btn-dark" onclick="selectEmbedTheme('dark', 'Gelap Obsidian (Dark)', this)" style="background: rgba(63, 63, 70, 0.25); border: 1.5px solid #71717a; color: #f4f4f5; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #3f3f46, #09090b); border: 1px solid #71717a;"></span>
+                                <span>Dark Stealth</span>
+                            </button>
+                            <div style="display: flex; align-items: center; gap: 6px; background: rgba(30, 41, 59, 0.6); border: 1.5px solid #475569; padding: 6px 10px; border-radius: 8px;">
+                                <input type="color" id="custom-color-picker" value="#ec4899" onchange="onCustomColorChange(this.value)" style="width: 22px; height: 22px; border: none; border-radius: 50%; cursor: pointer; background: transparent; padding: 0;">
+                                <span style="font-size: 11.5px; color: #cbd5e1; font-weight: 600;">Pilih Warna</span>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="code-box">
                         <button class="copy-btn" onclick="copySnippet()">Salin</button>
@@ -878,7 +920,9 @@ function maskApiKey(string $key): string
 &lt;/script&gt;</code>
                     </div>
 
-                    <p style="font-size: 12px; color: #64748b;">Tips Pelanggan: Anda boleh ubah <code>data-title="Nama Kedai Anda"</code> atau tambah <code>data-chips="Soalan 1,Soalan 2"</code> untuk butang pantas tersuai.</p>
+                    <p style="font-size: 12px; color: #64748b;">
+                        Tips Pelanggan: Anda boleh gunakan <code>data-theme="gold-black"</code>, <code>data-theme="black-red"</code>, atau mana-mana warna kod hex <code>data-color="#warna"</code>.
+                    </p>
                 </div>
 
             </div>
@@ -1327,6 +1371,54 @@ function maskApiKey(string $key): string
                 botMsg.textContent = 'Ralat menghubungi API chatbot.';
             }
             logs.scrollTop = logs.scrollHeight;
+        }
+
+        let currentSelectedTheme = 'purple';
+        let currentCustomHex = null;
+
+        function updateEmbedSnippet() {
+            const host = '<?= $_SERVER['HTTP_HOST'] ?? 'chat.kpst.my' ?>';
+            let themeParam = '';
+            if (currentCustomHex) {
+                themeParam = `\n    data-color="${currentCustomHex}"`;
+            } else if (currentSelectedTheme && currentSelectedTheme !== 'purple') {
+                themeParam = `\n    data-theme="${currentSelectedTheme}"`;
+            }
+
+            const snippet = `<!-- AiMariaDb Chatbot Widget (Sesuai untuk sebarang Website Pelanggan) -->\n<script \n    id="ai-mariadb-script"\n    src="https://${host}/widget/chat.js" \n    data-api="https://${host}/api/chat.php"\n    data-title="Pembantu Kedai AI"${themeParam}\n    async defer>\n</script>`;
+            
+            document.getElementById('embed-code-text').textContent = snippet;
+        }
+
+        function selectEmbedTheme(themeKey, themeLabel, btn) {
+            currentSelectedTheme = themeKey;
+            currentCustomHex = null;
+            document.getElementById('current-theme-label').textContent = 'Tema: ' + themeLabel;
+            
+            document.querySelectorAll('.theme-btn').forEach(b => {
+                b.style.boxShadow = 'none';
+                b.style.transform = 'scale(1)';
+                b.style.opacity = '0.75';
+            });
+            if (btn) {
+                btn.style.boxShadow = '0 0 0 2px #fff, 0 4px 12px rgba(0,0,0,0.5)';
+                btn.style.transform = 'scale(1.04)';
+                btn.style.opacity = '1';
+            }
+            updateEmbedSnippet();
+        }
+
+        function onCustomColorChange(hex) {
+            currentCustomHex = hex;
+            currentSelectedTheme = 'custom';
+            document.getElementById('current-theme-label').textContent = 'Tema: Warna Khas (' + hex + ')';
+            
+            document.querySelectorAll('.theme-btn').forEach(b => {
+                b.style.boxShadow = 'none';
+                b.style.transform = 'scale(1)';
+                b.style.opacity = '0.75';
+            });
+            updateEmbedSnippet();
         }
 
         function copySnippet() {

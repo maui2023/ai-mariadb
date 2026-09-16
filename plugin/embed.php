@@ -24,6 +24,8 @@ if (!function_exists('render_ai_chatbot')) {
         $widgetUrl = htmlspecialchars($options['widget_url'] ?? '/widget/chat.js', ENT_QUOTES, 'UTF-8');
         $title = htmlspecialchars($options['title'] ?? 'Pembantu Kedai AI', ENT_QUOTES, 'UTF-8');
         $greeting = htmlspecialchars($options['greeting'] ?? 'Hai! Ada apa yang boleh saya bantu mengenai produk atau waktu operasi kami?', ENT_QUOTES, 'UTF-8');
+        $themeAttr = !empty($options['theme']) ? ' data-theme="' . htmlspecialchars($options['theme'], ENT_QUOTES, 'UTF-8') . '"' : '';
+        $colorAttr = !empty($options['color']) ? ' data-color="' . htmlspecialchars($options['color'], ENT_QUOTES, 'UTF-8') . '"' : '';
 
         return <<<HTML
 <!-- AiMariaDb Chatbot Plugin -->
@@ -32,7 +34,7 @@ if (!function_exists('render_ai_chatbot')) {
     src="{$widgetUrl}" 
     data-api="{$apiUrl}" 
     data-title="{$title}" 
-    data-greeting="{$greeting}" 
+    data-greeting="{$greeting}"{$themeAttr}{$colorAttr}
     async defer>
 </script>
 <!-- End AiMariaDb Chatbot Plugin -->

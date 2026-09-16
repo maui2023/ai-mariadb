@@ -298,7 +298,22 @@ try {
         }
     </style>
 </head>
-<body>
+    <!-- Top Live Theme Switcher Bar -->
+    <div style="background: #090d16; color: #fff; padding: 9px 20px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #1e293b;">
+        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <span style="font-weight: 700; color: #f8fafc; font-size: 12.5px;">🎨 Uji Tema Chatbot:</span>
+            <button onclick="changeDemoTheme('purple')" style="background: #7c3aed; color: #fff; border: none; padding: 5px 11px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">Ungu (Default)</button>
+            <button onclick="changeDemoTheme('gold-black')" style="background: #18181b; color: #fef08a; border: 1.5px solid #d4af37; padding: 5px 11px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">✨ Gold + Black</button>
+            <button onclick="changeDemoTheme('black-red')" style="background: #18181b; color: #fca5a5; border: 1.5px solid #ef4444; padding: 5px 11px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">🔥 Black + Red</button>
+            <button onclick="changeDemoTheme('emerald')" style="background: #059669; color: #fff; border: none; padding: 5px 11px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">🌿 Emerald</button>
+            <button onclick="changeDemoTheme('blue')" style="background: #2563eb; color: #fff; border: none; padding: 5px 11px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">🌊 Ocean Blue</button>
+            <button onclick="changeDemoTheme('orange')" style="background: #ea580c; color: #fff; border: none; padding: 5px 11px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">🌅 Sunset</button>
+            <button onclick="changeDemoTheme('dark')" style="background: #27272a; color: #fff; border: 1px solid #52525b; padding: 5px 11px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">🌙 Dark</button>
+        </div>
+        <div style="font-size: 12px; color: #94a3b8;">
+            Klik mana-mana tema untuk melihat transformasi warna secara langsung!
+        </div>
+    </div>
 
     <nav>
         <div class="nav-logo">
@@ -318,6 +333,19 @@ try {
         <span>💡</span>
         <span><strong>Laman Demo:</strong> Chatbot di sudut bawah kanan membaca maklumat pangkalan data kedai ini secara langsung melalui model <strong>embeddinggemma</strong>! Cuba klik gelembung sembang di bawah.</span>
     </div>
+
+    <script>
+        function changeDemoTheme(themeName) {
+            if (window.AiMariaDbSetTheme) {
+                window.AiMariaDbSetTheme(themeName);
+                // Buka chat jika belum terbuka supaya user nampak perubahannya
+                const chatWin = document.getElementById('ai-chat-window');
+                if (chatWin && !chatWin.classList.contains('ai-chat-open')) {
+                    document.getElementById('ai-chat-bubble')?.click();
+                }
+            }
+        }
+    </script>
 
     <section class="hero">
         <h1>Koleksi Fesyen & Kasut Terkini</h1>
