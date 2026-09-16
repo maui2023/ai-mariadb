@@ -87,4 +87,79 @@ class VectorSearch
 
         return array_slice($results, 0, $limit);
     }
+
+    /**
+     * Carian berasaskan kata kunci pintar sekiranya servis embedding AI tergendala
+     * 
+     * @param string $query Teks soalan atau carian pengguna
+     * @param int $limit Bilangan rekod maksimum
+     * @return array Rekod relevan dengan format yang konsisten
+     */
+    public static function searchByKeyword(string $query, int $limit = 5): array
+    {
+        $pdo = Database::getLocalPdo();
+        $stmt = $pdo->query("SELECT id, connection_id, source_table, source_id, title, content FROM ai_knowledge_vectors");
+        $rows = $stmt->fetchAll();
+
+        $cleanQuery = mb_strtolower(trim($query));
+        $tokens = preg_split('/[\s,\.\?\!\-\_\:\;\/\|\(\)\[\]]+/u', $cleanQuery, -1, PREG_SPLIT_NO_EMPTY);
+        $stopWords = [
+            'ada', 'di', 'ke', 'dari', 'yang', 'dan', 'atau', 'ini', 'itu', 'untuk', 'pada', 
+            'saya', 'awak', 'kami', 'tak', 'tidak', 'kah', 'pun', 'apakah', 'siapakah', 'bagaimanakah',
+            'the', 'is', 'a', 'an', 'what', 'how', 'when', 'where', 'bila', 'berapa'
+        ];
+        $keywords = array_values(array_filter($tokens, fn($w) => mb_strlen($w) > 1 && !in_array($w, $stopWords, true)));
+
+        if (empty($keywords)) {
+            $keywords = [$cleanQuery];
+        }
+
+        $results = [];
+        $seenKeys = [];
+
+        foreach ($rows as $row) {
+            $uniqueKey = $row['source_table'] . ':' . $row['source_id'];
+            if (isset($seenKeys[$uniqueKey])) {
+                continue;
+            }
+
+            $titleLower = mb_strtolower((string)$row['title']);
+            $contentLower = mb_strtolower((string)$row['content']);
+            $score = 0.0;
+
+            // Semak padanan penuh frasa
+            if (str_contains($titleLower, $cleanQuery)) {
+                $score += 0.8;
+            } elseif (str_contains($contentLower, $cleanQuery)) {
+                $score += 0.6;
+            }
+
+            // Semak padanan setiap kata kunci
+            $matchedTokens = 0;
+            foreach ($keywords as $kw) {
+                if (str_contains($titleLower, $kw)) {
+                    $score += 0.4;
+                    $matchedTokens++;
+                } elseif (str_contains($contentLower, $kw)) {
+                    $score += 0.25;
+                    $matchedTokens++;
+                }
+            }
+
+            if ($score > 0) {
+                $seenKeys[$uniqueKey] = true;
+                $results[] = [
+                    'id' => $row['id'],
+                    'source_table' => $row['source_table'],
+                    'source_id' => $row['source_id'],
+                    'title' => $row['title'],
+                    'content' => $row['content'],
+                    'score' => round(min(1.0, $score), 4),
+                ];
+            }
+        }
+
+        usort($results, fn($a, $b) => $b['score'] <=> $a['score']);
+        return array_slice($results, 0, $limit);
+    }
 }

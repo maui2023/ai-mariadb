@@ -101,6 +101,11 @@ class Indexer
                         continue;
                     }
 
+                    // Abaikan kolum teknikal primary key 'id' dan timestamp daripada teks carian
+                    if (in_array(strtolower((string)$colName), ['id', 'rowid', 'created_at', 'updated_at'], true)) {
+                        continue;
+                    }
+
                     $cleanVal = trim((string)$val);
                     $fieldStrings[] = "{$colName}: {$cleanVal}";
 

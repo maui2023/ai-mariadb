@@ -8,3 +8,4 @@ public/index.html
 .env.example
 .env.*.local
 *.log
+data/ai_settings.json
