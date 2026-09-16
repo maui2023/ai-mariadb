@@ -606,6 +606,92 @@
         for (const [prop, val] of Object.entries(themeVars)) {
             rootContainer.style.setProperty(prop, val);
         }
+
+        // Suntik tag <style> dinamik terus ke <head> bagi mengatasi sebarang cache CSS lama
+        let dynamicStyle = document.getElementById('ai-chat-dynamic-theme');
+        if (!dynamicStyle) {
+            dynamicStyle = document.createElement('style');
+            dynamicStyle.id = 'ai-chat-dynamic-theme';
+            document.head.appendChild(dynamicStyle);
+        }
+
+        const isDarkTheme = (mode === 'dark' || normalized === 'dark');
+        const headerBg = themeVars['--ai-header-bg'] || '#7c3aed';
+        const headerText = themeVars['--ai-header-text'] || '#ffffff';
+        const headerBorder = themeVars['--ai-header-border'] || 'rgba(255,255,255,0.15)';
+        const bubbleBg = themeVars['--ai-bubble-bg'] || headerBg;
+        const bubbleShadow = themeVars['--ai-bubble-shadow'] || '0 10px 25px rgba(0,0,0,0.3)';
+        const userBubbleBg = themeVars['--ai-user-bubble-bg'] || headerBg;
+        const userBubbleText = themeVars['--ai-user-bubble-text'] || '#ffffff';
+        const sendBtnBg = themeVars['--ai-send-btn-bg'] || headerBg;
+        const chipText = themeVars['--ai-chip-text'] || '#6d28d9';
+        const chipBorder = themeVars['--ai-chip-border'] || '#ddd6fe';
+        const chipHoverBg = themeVars['--ai-chip-hover-bg'] || '#f5f3ff';
+        const bulletColor = themeVars['--ai-bullet-color'] || themeVars['--ai-primary'] || '#7c3aed';
+        const focusBorder = themeVars['--ai-input-focus-border'] || bulletColor;
+        const footerIcon = themeVars['--ai-footer-icon'] || bulletColor;
+
+        dynamicStyle.textContent = `
+            #ai-chat-root .ai-chat-header {
+                background: ${headerBg} !important;
+                color: ${headerText} !important;
+                border-bottom: 1px solid ${headerBorder} !important;
+            }
+            #ai-chat-root .ai-chat-title, #ai-chat-root .ai-chat-status {
+                color: ${headerText} !important;
+            }
+            #ai-chat-root #ai-chat-bubble {
+                background: ${bubbleBg} !important;
+                box-shadow: ${bubbleShadow} !important;
+            }
+            #ai-chat-root .ai-message-user .ai-bubble {
+                background: ${userBubbleBg} !important;
+                color: ${userBubbleText} !important;
+            }
+            #ai-chat-root .ai-chat-send-btn {
+                background: ${sendBtnBg} !important;
+            }
+            #ai-chat-root .ai-chip {
+                color: ${chipText} !important;
+                border-color: ${chipBorder} !important;
+            }
+            #ai-chat-root .ai-chip:hover {
+                background: ${chipHoverBg} !important;
+            }
+            #ai-chat-root .ai-bullet-dot {
+                color: ${bulletColor} !important;
+            }
+            #ai-chat-root .ai-chat-input-box:focus-within {
+                border-color: ${focusBorder} !important;
+            }
+            #ai-chat-root .ai-chat-footer-badge svg {
+                color: ${footerIcon} !important;
+            }
+            ${isDarkTheme ? `
+            #ai-chat-root #ai-chat-window {
+                background: #18181b !important;
+            }
+            #ai-chat-root .ai-chat-messages {
+                background: #09090b !important;
+            }
+            #ai-chat-root .ai-message-bot .ai-bubble {
+                background: #18181b !important;
+                color: #f4f4f5 !important;
+                border-color: #27272a !important;
+            }
+            #ai-chat-root .ai-chat-input-container {
+                background: #18181b !important;
+                border-color: #27272a !important;
+            }
+            #ai-chat-root .ai-chat-input-box {
+                background: #09090b !important;
+                border-color: #27272a !important;
+            }
+            #ai-chat-root .ai-chat-input {
+                color: #ffffff !important;
+            }
+            ` : ''}
+        `;
     }
 
     // Terapkan tema yang dipilih pelanggan serta-merta

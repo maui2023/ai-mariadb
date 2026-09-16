@@ -419,7 +419,7 @@ try {
     -->
     <?= render_ai_chatbot([
         'api_url' => '/api/chat.php',
-        'widget_url' => '/widget/chat.js',
+        'widget_url' => '/widget/chat.js?v=2',
         'title' => 'Pembantu Butik AI',
         'greeting' => 'Hai! 👋 Selamat datang ke Butik Moden. Anda boleh tanya saya tentang stok saiz kasut, baju melayu atau waktu kedai kami!',
     ]) ?>

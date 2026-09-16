@@ -913,7 +913,7 @@ function maskApiKey(string $key): string
                         <code id="embed-code-text">&lt;!-- AiMariaDb Chatbot Widget (Sesuai untuk sebarang Website Pelanggan) --&gt;
 &lt;script 
     id="ai-mariadb-script"
-    src="https://<?= $_SERVER['HTTP_HOST'] ?? 'chat.kpst.my' ?>/widget/chat.js" 
+    src="https://<?= $_SERVER['HTTP_HOST'] ?? 'chat.kpst.my' ?>/widget/chat.js?v=2" 
     data-api="https://<?= $_SERVER['HTTP_HOST'] ?? 'chat.kpst.my' ?>/api/chat.php"
     data-title="Pembantu Kedai AI"
     async defer&gt;
@@ -1386,7 +1386,7 @@ function maskApiKey(string $key): string
             }
 
             const closeScriptTag = '<' + '/script>';
-            const snippet = `<!-- AiMariaDb Chatbot Widget (Sesuai untuk sebarang Website Pelanggan) -->\n<script \n    id="ai-mariadb-script"\n    src="https://${host}/widget/chat.js" \n    data-api="https://${host}/api/chat.php"\n    data-title="Pembantu Kedai AI"${themeParam}\n    async defer>\n${closeScriptTag}`;
+            const snippet = `<!-- AiMariaDb Chatbot Widget (Sesuai untuk sebarang Website Pelanggan) -->\n<script \n    id="ai-mariadb-script"\n    src="https://${host}/widget/chat.js?v=2" \n    data-api="https://${host}/api/chat.php"\n    data-title="Pembantu Kedai AI"${themeParam}\n    async defer>\n${closeScriptTag}`;
             
             document.getElementById('embed-code-text').textContent = snippet;
         }

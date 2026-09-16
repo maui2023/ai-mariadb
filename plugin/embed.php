@@ -21,7 +21,7 @@ if (!function_exists('render_ai_chatbot')) {
     function render_ai_chatbot(array $options = []): string
     {
         $apiUrl = htmlspecialchars($options['api_url'] ?? '/api/chat.php', ENT_QUOTES, 'UTF-8');
-        $widgetUrl = htmlspecialchars($options['widget_url'] ?? '/widget/chat.js', ENT_QUOTES, 'UTF-8');
+        $widgetUrl = htmlspecialchars($options['widget_url'] ?? '/widget/chat.js?v=2', ENT_QUOTES, 'UTF-8');
         $title = htmlspecialchars($options['title'] ?? 'Pembantu Kedai AI', ENT_QUOTES, 'UTF-8');
         $greeting = htmlspecialchars($options['greeting'] ?? 'Hai! Ada apa yang boleh saya bantu mengenai produk atau waktu operasi kami?', ENT_QUOTES, 'UTF-8');
         $themeAttr = !empty($options['theme']) ? ' data-theme="' . htmlspecialchars($options['theme'], ENT_QUOTES, 'UTF-8') . '"' : '';
