@@ -57,11 +57,14 @@ class OllamaClient implements AiClientInterface
      */
     public function embed(string $text, ?string $model = null): array
     {
-        $model = $model ?? Config::EMBEDDING_MODEL;
+        $model = $model ?? Config::getOllamaEmbeddingModel();
 
         $payload = [
             'model' => $model,
             'input' => $text,
+            'options' => [
+                'num_thread' => 6,
+            ],
         ];
 
         $response = $this->request('/api/embed', 'POST', $payload, 90);
@@ -84,7 +87,7 @@ class OllamaClient implements AiClientInterface
      */
     public function chat(string $systemPrompt, string $userMessage, ?string $model = null): string
     {
-        $model = $model ?? Config::CHAT_MODEL;
+        $model = $model ?? Config::getOllamaChatModel();
 
         $payload = [
             'model' => $model,
@@ -100,8 +103,11 @@ class OllamaClient implements AiClientInterface
                 ],
             ],
             'options' => [
-                'temperature' => 0.0, // Sifar rawak untuk jawapan 100% berpandukan fakta
-                'num_predict' => 120, // Ruang mencukupi untuk ayat lengkap
+                'temperature' => 0.1,
+                'num_thread' => 6,
+                'num_ctx' => 512,
+                'num_predict' => 50,
+                'stop' => ["\n\nPelanggan:", "\n\nUser:", "###", "\n\nSoalan:"],
             ],
         ];
 

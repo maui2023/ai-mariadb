@@ -37,6 +37,8 @@ try {
         $ollamaOnline = $ollama->isAvailable();
         $geminiOnline = !empty($settings['gemini_api_key']) ? $gemini->isAvailable() : false;
 
+        $ollamaModels = $ollamaOnline ? $ollama->listModels() : [];
+
         echo json_encode([
             'success' => true,
             'settings' => [
@@ -53,6 +55,7 @@ try {
                 'ollama_online' => $ollamaOnline,
                 'gemini_online' => $geminiOnline,
                 'active_provider' => Config::getAiProvider(),
+                'available_ollama_models' => $ollamaModels,
             ],
         ]);
         exit;

@@ -68,19 +68,37 @@ class ChatService
         $historyLines = [];
         if (!empty($history)) {
             $recentHistory = array_slice($history, -4);
-            $historySnippet = [];
+            $userHistorySnippets = [];
             foreach ($recentHistory as $msg) {
-                $role = ($msg['role'] ?? '') === 'user' ? 'Pelanggan' : 'Pembantu';
+                $isUser = ($msg['role'] ?? '') === 'user';
+                $role = $isUser ? 'Pelanggan' : 'Pembantu';
                 $content = trim((string)($msg['content'] ?? ''));
                 if ($content !== '') {
                     $historyLines[] = "{$role}: {$content}";
-                    $historySnippet[] = $content;
+                    // Hanya kumpul mesej pengguna untuk konteks carian
+                    if ($isUser && $content !== $cleanQuestion) {
+                        $userHistorySnippets[] = $content;
+                    }
                 }
             }
-            if (!empty($historySnippet)) {
-                // Sertakan konteks dari perbualan terdahulu untuk memastikan carian vektor memahami entiti yang dirujuk
-                $contextualSearchText = $cleanQuestion . ' ' . implode(' ', $historySnippet);
+
+            // Semak jika soalan sekarang adalah soalan rujukan lanjutan tanpa subjek (cth: "berapa harga?", "ada saiz 42?", "warna apa?")
+            $isAnaphoric = (bool)preg_match('/\b(berapa|harga|saiz|ada|stok|warna|lagi|tu|itu|ni|ini|dia|ia|tadi)\b/ui', $cleanQuestion)
+                && !preg_match('/\b(kasut|baju|kurung|kemeja|seluar|jubah|nimbus|formal|melayu|pos|penghantaran|pemulangan|tukar|pulang|operasi|waktu)\b/ui', $cleanQuestion);
+
+            if ($isAnaphoric && !empty($userHistorySnippets)) {
+                $lastUserMsg = end($userHistorySnippets);
+                $contextualSearchText = $lastUserMsg . ' ' . $cleanQuestion;
             }
+        }
+
+        // 0. Semak niat khas atau soalan luar bidang (Identiti bot, Sekatan Coding, Salam, atau Soalan Umum)
+        $specialResponse = $this->checkSpecialIntent($cleanQuestion);
+        if ($specialResponse !== null) {
+            return [
+                'answer' => $specialResponse,
+                'sources' => [],
+            ];
         }
 
         try {
@@ -102,16 +120,27 @@ class ChatService
 
             // 2. Cari rekod terdekat dalam pangkalan data pengetahuan
             if ($questionVector !== null) {
-                $relevantRecords = VectorSearch::search($questionVector, limit: 8, threshold: 0.25);
+                $relevantRecords = VectorSearch::search($questionVector, limit: 8, threshold: 0.28);
             } else {
                 // Fallback carian kata kunci pintar jika servis embedding AI tidak dapat diakses
                 $relevantRecords = VectorSearch::searchByKeyword($contextualSearchText, limit: 8);
             }
 
-            // 3. Sekiranya tiada rekod yang sepadan
-            if (empty($relevantRecords)) {
+            $isFashionOrStylingAdvice = $this->isFashionOrStylingAdvice($cleanQuestion);
+
+            // 3. Sekiranya tiada rekod yang sepadan atau skor terlalu rendah
+            if (empty($relevantRecords) || (isset($relevantRecords[0]['score']) && $relevantRecords[0]['score'] < 0.32 && !$this->hasDirectKeywordMatch($cleanQuestion, $relevantRecords[0]))) {
+                // Gunakan keupayaan AI untuk soalan gaya, padanan warna, tips fesyen atau penjagaan produk
+                if ($isFashionOrStylingAdvice) {
+                    return [
+                        'answer' => $this->generateFashionStylingAdvice($cleanQuestion),
+                        'sources' => [],
+                    ];
+                }
+
+                // Untuk soalan umum lain di luar bidang
                 return [
-                    'answer' => "Maaf, maklumat berkenaan pertanyaan anda tidak ditemui dalam rekod perniagaan kami buat masa ini. Sila hubungi staf kami untuk bantuan lanjut.",
+                    'answer' => "Maaf, kami tidak menjawab soalan umum di luar bidang perniagaan kami. Sila ajukan soalan berkaitan katalog produk, promosi, polisi pemulangan, atau waktu operasi butik kami.",
                     'sources' => [],
                 ];
             }
@@ -121,33 +150,54 @@ class ChatService
             $filteredRecords = [];
             $productCount = 0;
 
-            // Semak jika soalan atau perbualan lepas menyentuh promosi atau diskaun
-            $isPromoQuery = (bool)preg_match('/\b(diskaun|diskuan|promosi|promo|jualan|potongan|voucher|kupon|percuma|free|tawaran)\b/i', $contextualSearchText);
+            // Semak niat soalan khusus untuk setiap jadual
+            $topSourceTable = $relevantRecords[0]['source_table'];
+            $isPolicyQuery = (bool)preg_match('/\b(polisi|policy|tukar|pulang|pemulangan|pos|penghantaran|kos|caj|rosak|syarat)\b/i', $cleanQuestion);
+            $isHoursQuery = (bool)preg_match('/\b(waktu|jam|masa|buka|tutup|hari|operasi|ahad|isnin|selasa|rabu|khamis|jumaat|sabtu)\b/i', $cleanQuestion);
+            $isPromoQuery = (bool)preg_match('/\b(diskaun|diskuan|promosi|promo|jualan|potongan|voucher|kupon|percuma|free|tawaran)\b/i', $cleanQuestion);
 
             foreach ($relevantRecords as $rec) {
-                if ($rec['source_table'] === 'products') {
-                    // Simpan produk utama jika ia benar-benar relevan dengan soalan pengguna
-                    $isRelevantProduct = ($rec['score'] >= ($topScore * 0.70) && $rec['score'] >= 0.30);
-                    if ($isRelevantProduct && $productCount < 2) {
-                        $filteredRecords[] = $rec;
-                        $productCount++;
+                $table = $rec['source_table'];
+                if ($table === 'products') {
+                    if ($topSourceTable === 'products' || (!$isPolicyQuery && !$isHoursQuery)) {
+                        $isRelevantProduct = ($rec['score'] >= ($topScore * 0.75) && $rec['score'] >= 0.30);
+                        if ($isRelevantProduct && $productCount < 2) {
+                            $filteredRecords[] = $rec;
+                            $productCount++;
+                        }
                     }
-                } else {
-                    // Jadual sokongan (promotions, store_policies, store_hours)
-                    if ($rec['source_table'] === 'promotions') {
-                        if ($isPromoQuery || $rec['score'] >= 0.35 || $rec['score'] >= ($topScore * 0.65)) {
-                            $filteredRecords[] = $rec;
-                        }
-                    } else {
-                        if ($rec['score'] >= 0.40 || $rec['score'] >= ($topScore * 0.70)) {
-                            $filteredRecords[] = $rec;
-                        }
+                } elseif ($table === 'promotions') {
+                    if ($isPromoQuery || $topSourceTable === 'promotions') {
+                        $filteredRecords[] = $rec;
+                    }
+                } elseif ($table === 'store_policies') {
+                    if ($isPolicyQuery || $topSourceTable === 'store_policies') {
+                        $filteredRecords[] = $rec;
+                    }
+                } elseif ($table === 'store_hours') {
+                    if ($isHoursQuery || $topSourceTable === 'store_hours') {
+                        $filteredRecords[] = $rec;
                     }
                 }
             }
 
             if (empty($filteredRecords)) {
-                $filteredRecords = array_slice($relevantRecords, 0, 4);
+                $filteredRecords = array_slice($relevantRecords, 0, 2);
+            }
+
+            // Sekiranya pengguna menyatakan saiz khusus (cth: 42, 43, S, M, L, XL), utamakan rekod yang sepadan dengan saiz tersebut
+            if (preg_match('/\b(?:saiz|size)?\s*(\d{2}|[smlx]+)\b/i', $cleanQuestion, $sizeMatch)) {
+                $requestedSize = strtolower(trim($sizeMatch[1]));
+                $sizeMatchedRecords = [];
+                foreach ($filteredRecords as $rec) {
+                    $recContentLower = strtolower($rec['title'] . ' ' . $rec['content']);
+                    if (str_contains($recContentLower, $requestedSize)) {
+                        $sizeMatchedRecords[] = $rec;
+                    }
+                }
+                if (!empty($sizeMatchedRecords)) {
+                    $filteredRecords = $sizeMatchedRecords;
+                }
             }
 
             // 4. Susun konteks berstruktur bersih daripada rekod yang dijumpai tanpa ID teknikal
@@ -171,29 +221,20 @@ class ChatService
                 ];
             }
 
-            // 5. Arahan System Prompt Khidmat Pelanggan Mesra & Semulajadi
+            // 5. Arahan System Prompt Khidmat Pelanggan Mesra & Tepat Berdasarkan Fakta
             $historyBlock = "";
             if (!empty($historyLines)) {
                 $historyBlock = "\n[SEJARAH PERBUALAN LEPAS]\n" . implode("\n", $historyLines) . "\n";
             }
 
             $systemPrompt = <<<PROMPT
-Anda ialah pembantu AI khidmat pelanggan rasmi bagi perniagaan ini.
-Tugas anda ialah melayani soalan pelanggan dengan ramah, mesra, sopan dan profesional berpandukan [MAKLUMAT PERNIAGAAN] dan [SEJARAH PERBUALAN LEPAS].
-
-ARAHAN PENTING:
-1. Berikan jawapan seperti seorang pembantu khidmat pelanggan manusia yang berbudi bahasa dan mesra.
-2. JANGAN SEKALI-KALI memaparkan ID pangkalan data (contoh: "id: 1" atau seumpamanya), nama kolum mentah pangkalan data, atau sintaks pemisah paip ("|").
-3. Sampaikan jawapan dalam ayat perbualan yang lengkap, jelas dan mudah difahami pelanggan.
-4. Gunakan mata wang Ringgit Malaysia (RM) sahaja.
-5. Fahami konteks soalan susulan pelanggan berdasarkan [SEJARAH PERBUALAN LEPAS] (contoh: jika pelanggan bertanya "selepas diskaun berapa?", "ada stok lagi?", atau "warna apa", fahami dengan tepat produk yang sedang dibincangkan).
-6. Semak sama ada item tersebut layak mendapat promosi atau diskaun dalam [MAKLUMAT PERNIAGAAN]:
-   - Jika item layak promosi diskaun, kira dan nyatakan harga akhir selepas diskaun dalam RM.
-   - Jika item tidak termasuk dalam promosi atau tiada diskaun bagi kategorinya, jelaskan dengan sopan bahawa tawaran itu tidak terpakai untuk item berkenaan dan harganya kekal pada harga asal.
-7. JANGAN mereka maklumat atau membuat sebarang andaian di luar maklumat yang dibekalkan.
-8. JANGAN menyebut istilah teknikal seperti "products", "store_hours", "database", atau nama jadual sistem.
-9. Sekiranya maklumat berkenaan soalan tiada dalam fakta di bawah, jawab dengan sopan:
-   "Maaf, maklumat berkenaan pertanyaan anda tidak ditemui dalam rekod perniagaan kami buat masa ini. Sila hubungi khidmat staf kami untuk bantuan lanjut."
+Anda ialah Pembantu Maya rasmi butik kami.
+Jawab pertanyaan pelanggan berasaskan maklumat di bawah sahaja.
+Peraturan:
+1. Jawab dalam 1 atau 2 ayat Bahasa Melayu yang sopan, ringkas dan tepat.
+2. Nyatakan nama produk, baki stok, dan harga dalam RM mengikut maklumat yang ada.
+3. JANGAN reka maklumat luar atau andaian sendiri yang tiada dalam rekod.
+4. JANGAN sesekali memaparkan ID pangkalan data teknikal, nama jadual, atau kod programming.
 
 [MAKLUMAT PERNIAGAAN]
 {$contextText}
@@ -218,9 +259,19 @@ PROMPT;
 
             $cleanAnswer = trim($answer);
 
+            // Sanitasi Keselamatan: Sekat sebarang blok kod pengaturcaraan yang cuba dijana oleh LLM
+            if (preg_match('/```(python|php|javascript|js|html|css|sql|bash|c|java|cpp)?/i', $cleanAnswer)) {
+                $cleanAnswer = "Maaf, kami tidak menjawab soalan umum atau pertanyaan berkaitan pengaturcaraan (coding). Saya sedia membantu anda mengenai maklumat produk, saiz, harga, promosi atau waktu operasi butik kami.";
+            }
+
             // Sanitasi Keselamatan & Estetika Chatbot: Buang sebarang kebocoran nombor id atau pemisah paip SQL
             $cleanAnswer = preg_replace('/\b(id|ID):\s*\d+(\s*\|\s*)?/i', '', $cleanAnswer);
             $cleanAnswer = preg_replace('/(\s*\|\s*)+/', ' — ', $cleanAnswer);
+
+            // Keselamatan Halusinasi: Jika LLM tersilap menolak soalan sah sebagai soalan umum, guna jawapan fakta berstruktur
+            if (preg_match('/tidak menjawab soalan.*(stok|kasut|baju|harga|saiz|produk|operasi|kedai|butik|waktu)/iu', $cleanAnswer)) {
+                $cleanAnswer = $this->formatConversationalResponse($filteredRecords, $cleanQuestion);
+            }
 
             // Sanitasi Keselamatan Tambahan: Hapuskan sebarang cubaan LLM memetik nama jadual teknikal
             $forbiddenTechnicalPatterns = [
@@ -229,7 +280,6 @@ PROMPT;
             ];
             foreach ($forbiddenTechnicalPatterns as $pattern) {
                 if (preg_match($pattern, $cleanAnswer)) {
-                    // Jika LLM membocorkan nama jadual, gantikan dengan istilah mesra pengguna
                     $cleanAnswer = preg_replace('/\bproducts\b/i', 'katalog produk', $cleanAnswer);
                     $cleanAnswer = preg_replace('/\bstore_hours\b/i', 'waktu operasi kedai', $cleanAnswer);
                 }
@@ -246,6 +296,166 @@ PROMPT;
                 'sources' => [],
             ];
         }
+    }
+
+    /**
+     * Semak sama ada soalan berkaitan gaya fesyen, padanan warna, tips atau penjagaan pakaian/kasut
+     */
+    private function isFashionOrStylingAdvice(string $question): bool
+    {
+        $q = mb_strtolower(trim($question));
+        $patterns = [
+            '/\b(padanan|padan|matching|fesyen|fashion|gaya|style)\b/u',
+            '/\b(tips|petua|cadangan|cadang|recommend|advice)\b/u',
+            '/\b(warna\s+apa|warna\s+yang\s+sesuai|sesuai\s+dengan|sesuai\s+untuk)\b/u',
+            '/\b(kenduri|majlis|kahwin|perkahwinan|pejabat|formal|santai|casual|raya)\b/u',
+            '/\b(cara\s+(jaga|penjagaan|cuci|basuh|bersihkan|simpan))\b/u',
+            '/\b(kasut\s+kulit|baju\s+melayu|kain\s+cotton|material|fabrik|leather)\b/u',
+            '/\b(ukur\s+saiz|pilih\s+saiz|saiz\s+sesuai|cutting|potongan)\b/u',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $q)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Semak jika soalan mengandungi kata kunci yang benar-benar ada dalam rekod teratas
+     */
+    private function hasDirectKeywordMatch(string $question, array $record): bool
+    {
+        $q = mb_strtolower(trim($question));
+        $tokens = preg_split('/[\s,\.\?\!\-\_\:\;\/\|\(\)\[\]]+/u', $q, -1, PREG_SPLIT_NO_EMPTY);
+        $stopWords = [
+            'ada', 'di', 'ke', 'dari', 'yang', 'dan', 'atau', 'ini', 'itu', 'untuk', 'pada', 
+            'saya', 'awak', 'kami', 'tak', 'tidak', 'kah', 'pun', 'apakah', 'siapakah', 'bagaimanakah',
+            'siapa', 'nama', 'anda', 'kamu', 'bot', 'ai', 'bila', 'berapa', 'mana', 'apa'
+        ];
+        $meaningfulTokens = array_filter($tokens, fn($t) => mb_strlen($t) > 2 && !in_array($t, $stopWords, true));
+        if (empty($meaningfulTokens)) {
+            return false;
+        }
+
+        $recordText = mb_strtolower(($record['title'] ?? '') . ' ' . ($record['content'] ?? ''));
+        foreach ($meaningfulTokens as $token) {
+            if (str_contains($recordText, $token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Jana nasihat gaya fesyen dan padanan menggunakan kepintaran AI tanpa halusinasi pangkalan data
+     */
+    private function generateFashionStylingAdvice(string $question): string
+    {
+        $prompt = <<<PROMPT
+Anda ialah Pembantu Maya dan penasihat gaya rasmi butik fesyen kami.
+Pelanggan meminta panduan gaya, padanan warna pakaian, tips saiz, atau penjagaan produk.
+Tugas anda:
+1. Berikan nasihat gaya atau tips yang mesra, elegan dan praktikal dalam 2 hingga 3 ayat ringkas dalam Bahasa Melayu.
+2. Jemput pelanggan untuk meneroka koleksi pakaian atau kasut di butik kami sekiranya mereka berminat.
+3. JANGAN sesekali memaparkan kod pengaturcaraan, ID teknikal, atau maklumat palsu.
+PROMPT;
+
+        try {
+            $response = $this->ai->chat($prompt, $question);
+            return trim($response);
+        } catch (Throwable $e) {
+            if ($this->fallbackOllama !== null && $this->fallbackOllama->isAvailable()) {
+                try {
+                    return trim($this->fallbackOllama->chat($prompt, $question));
+                } catch (Throwable $oEx) {
+                    // Terus ke jawapan sandaran sopan
+                }
+            }
+            return "Untuk pilihan gaya yang kemas dan versatil, anda boleh memadankan warna-warna neutral seperti hitam, putih, atau kelabu untuk majlis formal mahupun santai. Jemput layari katalog butik kami untuk melihat koleksi pakaian dan kasut terkini!";
+        }
+    }
+
+    /**
+     * Semak niat khas atau soalan luar bidang (Identiti bot, Sekatan Coding, Salam, atau Soalan Umum)
+     * untuk melindungi domain perniagaan dan menghapuskan halusinasi.
+     */
+    private function checkSpecialIntent(string $question): ?string
+    {
+        $q = mb_strtolower(trim($question));
+
+        // 1. Soalan Pengaturcaraan / Coding / Teknikal Komputer (SEKAT SEPENUHNYA)
+        $codingPatterns = [
+            '/\b(coding|pengaturcaraan|programming|programmer|developer|software)\b/u',
+            '/\b(kod|code|script|skrip|function|loop|fungsi|syntax|algoritma|algorithm)\b/u',
+            '/\b(python|php|javascript|typescript|js|ts|java|ruby|golang|go|rust|html|css|sql|bash|powershell|react|vue|laravel|flutter|node|c\+\+|c\#)\b/u',
+            '/(c\+\+|c\#)/u',
+            '/\b(tuliskan|buatkan|bina|generate|create|write)\s+(kod|code|script|function|loop|api|class|program)\b/u',
+            '/\b(for\s+loop|while\s+loop|syntax\s+error|debug|stack\s*trace)\b/u',
+            '/\b(select\s+\*|drop\s+table|insert\s+into|delete\s+from|create\s+table)\b/u',
+        ];
+        foreach ($codingPatterns as $pattern) {
+            if (preg_match($pattern, $q)) {
+                return "Maaf, kami tidak menjawab soalan umum atau pertanyaan berkaitan pengaturcaraan (coding). Saya merupakan pembantu maya butik ini dan sedia membantu anda mengenai produk, saiz, harga, promosi atau waktu operasi butik kami.";
+            }
+        }
+
+        // 2. Soalan Identiti & Nama Bot (Bijak: tidak bernama & nyatakan peranan rasmi)
+        $identityPatterns = [
+            '/\b(siapa|siapakah|apa|apakah)\s+(nama\s+)?(anda|awak|kamu|bot|ai|sistem)\b/u',
+            '/\b(nama\s+)(anda|awak|kamu|bot|ai)\s*(siapa|apa|siapakah|apakah)?\b/u',
+            '/\b(anda|awak|kamu|bot)\s+(ada\s+nama|nama\s+apa|siapa|siapakah)\b/u',
+            '/\b(awak|anda|kamu)\s+ni\s+(siapa|apa)\b/u',
+            '/\b(siapa\s+kamu|siapa\s+awak|siapa\s+anda)\b/u',
+            '/\b(kenali\s+anda|kenali\s+awak|siapa\s+cipta\s+anda|siapa\s+buat\s+anda)\b/u',
+            '/\b(anda|awak)\s+(robot|manusia|ai)\s*(ke|kah)?\b/u',
+            '/^(siapa|apa)\s+nama\??$/u',
+        ];
+        foreach ($identityPatterns as $pattern) {
+            if (preg_match($pattern, $q)) {
+                return "Saya tidak mempunyai nama peribadi. Saya ialah Pembantu Maya rasmi bagi butik ini, sedia membantu anda menyemak maklumat produk, saiz, harga, stok, promosi atau waktu operasi kedai kami. Ada apa-apa yang boleh saya bantu mengenai pesanan atau pilihan produk anda?";
+            }
+        }
+
+        // 3. Salam Santun / Sapaan Mesra (Hanya jika pertanyaan pendek tanpa kata kunci produk)
+        $greetingPatterns = [
+            '/^(hai|hello|helo|hi|hola|hey|salam|assalamualaikum|assalam|slm)\b/u',
+            '/^(selamat\s+(pagi|tengah\s*hari|petang|malam))\b/u',
+            '/^(apa\s+khabar|khabar\s+baik)\b/u',
+            '/^(terima\s*kasih|tq|thanks|thank\s+you)\b/u',
+        ];
+        $tokens = preg_split('/\s+/u', $q, -1, PREG_SPLIT_NO_EMPTY);
+        if (count($tokens) <= 4) {
+            foreach ($greetingPatterns as $pattern) {
+                if (preg_match($pattern, $q)) {
+                    if (str_contains($q, 'terima kasih') || str_contains($q, 'tq') || str_contains($q, 'thank')) {
+                        return "Sama-sama! Senang dapat melayani anda. Sila beritahu saya jika anda memerlukan maklumat lain mengenai produk atau tawaran promosi butik kami. 😊";
+                    }
+                    return "Hai! Selamat datang ke butik kami. Saya sedia membantu anda mengenai produk, saiz, harga, tawaran diskaun atau waktu operasi kedai kami. Apa yang boleh saya bantu hari ini? 😊";
+                }
+            }
+        }
+
+        // 4. Soalan Umum di luar bidang perniagaan (Trivia, Cuaca, Politik, Sains, Resipi, Berita Dunia)
+        $outOfScopePatterns = [
+            '/\b(cuaca\s+hari\s+ini|ramalan\s+cuaca|suhu\s+hari\s+ini|hujan\s+ke\s+hari\s+ini)\b/u',
+            '/\b(siapa\s+perdana\s+menteri|siapa\s+presiden|menteri\s+besar|ahli\s+parlimen)\b/u',
+            '/\b(ibu\s+negara\s+|negara\s+mana|jarak\s+bumi|sistem\s+suria|planet)\b/u',
+            '/\b(resepi|resipi|cara\s+masak|masakan|menu\s+makan)\b/u',
+            '/\b(politik|pilihan\s+raya|parti\s+politik|kerajaan|parlimen)\b/u',
+            '/\b(kira\s+\d+\s*[\+\-\*\/]\s*\d+|formula\s+matematik|teorem)\b/u',
+            '/\b(ceritakan\s+kisah|tulis\s+cerita|karang\s+esei|buat\s+puisi|lirik\s+lagu)\b/u',
+            '/\b(fotosintesis|graviti|sel\s+haiwan|organisma|atom|molekul)\b/u',
+            '/\b(sukan\s+bola|piala\s+dunia|premier\s+league|liga\s+super)\b/u',
+        ];
+        foreach ($outOfScopePatterns as $pattern) {
+            if (preg_match($pattern, $q)) {
+                return "Maaf, kami tidak menjawab soalan umum di luar bidang perniagaan kami. Sila ajukan soalan berkaitan katalog produk, promosi, polisi pemulangan, atau waktu operasi butik kami.";
+            }
+        }
+
+        return null;
     }
 
     /**

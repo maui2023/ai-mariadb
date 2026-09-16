@@ -106,12 +106,16 @@ class VectorSearch
         $stopWords = [
             'ada', 'di', 'ke', 'dari', 'yang', 'dan', 'atau', 'ini', 'itu', 'untuk', 'pada', 
             'saya', 'awak', 'kami', 'tak', 'tidak', 'kah', 'pun', 'apakah', 'siapakah', 'bagaimanakah',
-            'the', 'is', 'a', 'an', 'what', 'how', 'when', 'where', 'bila', 'berapa'
+            'the', 'is', 'a', 'an', 'what', 'how', 'when', 'where', 'bila', 'berapa',
+            'siapa', 'nama', 'name', 'anda', 'kamu', 'bot', 'ai', 'dia', 'mereka', 'tolong',
+            'buat', 'boleh', 'ya', 'kan', 'lah', 'je', 'sahaja', 'saja', 'hello', 'hai', 'hi',
+            'tentang', 'mengenai', 'adakah', 'kenapa', 'mengapa', 'bagi', 'dengan'
         ];
         $keywords = array_values(array_filter($tokens, fn($w) => mb_strlen($w) > 1 && !in_array($w, $stopWords, true)));
 
+        // Jika tiada kata kunci produk/kedai yang bermakna selepas tapisan, jangan lakukan padanan rawak
         if (empty($keywords)) {
-            $keywords = [$cleanQuery];
+            return [];
         }
 
         $results = [];

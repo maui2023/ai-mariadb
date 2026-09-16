@@ -1,6 +1,7 @@
 /**
- * AiMariaDb Chatbot Widget - Vanilla JS Drop-in
- * Hanya masukkan 1 baris skrip ke mana-mana laman web PHP / HTML.
+ * AiMariaDb Chatbot Widget - Vanilla JS Drop-in (Premium & Mobile-Friendly)
+ * Memuatkan antara muka perbualan moden dengan sokongan rendering Markdown,
+ * layout responsif mesra mudah alih, dan perlindungan bebas halusinasi.
  */
 (function () {
     // 1. Dapatkan tetapan daripada atribut script tag atau konfigurasi global
@@ -10,15 +11,14 @@
     })();
 
     const apiUrl = currentScript?.getAttribute('data-api') || '/api/chat.php';
-    const widgetTitle = currentScript?.getAttribute('data-title') || 'Pembantu Kedai AI';
-    const widgetGreeting = currentScript?.getAttribute('data-greeting') || 'Hai! 👋 Ada apa yang boleh saya bantu mengenai produk, stok atau waktu kedai kami?';
+    const widgetTitle = currentScript?.getAttribute('data-title') || 'Pembantu Butik AI';
+    const widgetGreeting = currentScript?.getAttribute('data-greeting') || 'Hai! 👋 Selamat datang. Ada apa yang boleh saya bantu mengenai produk, harga, atau promosi kami?';
 
     // 2. Muat turun CSS widget secara automatik sekiranya belum ada
     if (!document.getElementById('ai-chat-css')) {
         const cssLink = document.createElement('link');
         cssLink.id = 'ai-chat-css';
         cssLink.rel = 'stylesheet';
-        // Ambil path relatif kepada chat.js
         const scriptSrc = currentScript?.src || '';
         const cssPath = scriptSrc ? scriptSrc.replace(/\.js$/, '.css') : '/widget/chat.css';
         cssLink.href = cssPath;
@@ -38,20 +38,21 @@
                         <span class="ai-chat-status-dot"></span>
                     </div>
                     <div class="ai-chat-header-text">
-                        <div class="ai-chat-title">${widgetTitle}</div>
-                        <div class="ai-chat-status">Aktif sekarang</div>
+                        <div class="ai-chat-title">${escapeHtmlOnly(widgetTitle)}</div>
+                        <div class="ai-chat-status">
+                            <span>Aktif sekarang</span>
+                        </div>
                     </div>
                 </div>
                 <div class="ai-chat-header-actions">
-                    <button class="ai-chat-dots-btn" title="Pilihan">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <circle cx="5" cy="12" r="2"/>
-                            <circle cx="12" cy="12" r="2"/>
-                            <circle cx="19" cy="12" r="2"/>
+                    <button class="ai-chat-action-btn" id="ai-chat-reset" title="Mula Semula Perbualan">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                            <path d="M3 3v5h5"></path>
                         </svg>
                     </button>
-                    <button class="ai-chat-close-btn" id="ai-chat-close" title="Tutup">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <button class="ai-chat-action-btn" id="ai-chat-close" title="Tutup Chat">
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
@@ -63,76 +64,130 @@
                 <div class="ai-message ai-message-bot">
                     <div class="ai-msg-row">
                         <div class="ai-msg-avatar">👩‍💼</div>
-                        <div class="ai-bubble"><div class="ai-msg-text">${widgetGreeting}</div><span class="ai-msg-time">Baru saja</span></div>
+                        <div class="ai-bubble">
+                            <div class="ai-msg-text">${formatChatMessage(widgetGreeting)}</div>
+                            <span class="ai-msg-time">Baru saja</span>
+                        </div>
                     </div>
                 </div>
                 <div class="ai-quick-chips" id="ai-quick-chips">
-                    <button class="ai-chip" data-q="Ada stok kasut saiz 42 tak?">👟 Stok Kasut</button>
-                    <button class="ai-chip" data-q="Buka kedai hari Ahad tak?">🕒 Waktu Kedai</button>
-                    <button class="ai-chip" data-q="Berapa harga baju melayu?">👕 Baju Melayu</button>
+                    <button class="ai-chip" data-q="Ada stok kasut saiz 42 tak?">👟 Stok Kasut 42</button>
+                    <button class="ai-chip" data-q="Ada sebarang promosi atau diskaun semasa?">🎉 Promosi & Diskaun</button>
+                    <button class="ai-chip" data-q="Kedai buka tak hari Ahad dan pukul berapa tutup?">⏰ Waktu Operasi</button>
+                    <button class="ai-chip" data-q="Berapa kos pos ke Sabah Sarawak?">📦 Kos Penghantaran</button>
                 </div>
             </div>
 
             <div class="ai-chat-input-container">
                 <div class="ai-chat-input-box">
-                    <input type="text" class="ai-chat-input" id="ai-chat-input-text" placeholder="Tulis mesej anda..." autocomplete="off">
+                    <input type="text" class="ai-chat-input" id="ai-chat-input-text" placeholder="Tanya apa sahaja..." autocomplete="off">
                     <div class="ai-input-actions">
                         <button class="ai-action-icon-btn" id="ai-emoji-btn" type="button" title="Emoji">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="10"></circle>
                                 <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
                                 <line x1="9" y1="9" x2="9.01" y2="9"></line>
                                 <line x1="15" y1="9" x2="15.01" y2="9"></line>
                             </svg>
                         </button>
-                        <button class="ai-chat-send-btn" id="ai-chat-send-trigger" title="Hantar">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                        <button class="ai-chat-send-btn" id="ai-chat-send-trigger" title="Hantar Mesej">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="22" y1="2" x2="11" y2="13"></line>
                                 <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                             </svg>
                         </button>
                     </div>
                 </div>
-                <div class="ai-chat-footer-badge">Dilindungi AI MariaDB &bull; Bebas Halusinasi Database</div>
+                <div class="ai-chat-footer-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <span>Dikuasakan oleh AI MariaDB · Bebas Halusinasi</span>
+                </div>
             </div>
         </div>
 
-        <button id="ai-chat-bubble" title="Buka Bantuan AI">
-            <span class="ai-bubble-icon-chat">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-            </span>
-            <span class="ai-bubble-icon-close">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-            </span>
-        </button>
+        <div class="ai-chat-trigger-wrap">
+            <div class="ai-chat-teaser-badge" id="ai-chat-teaser">
+                <span>Tanya AI</span>
+                <span>👋</span>
+            </div>
+            <button id="ai-chat-bubble" title="Buka Bantuan AI" aria-label="Buka Chat AI">
+                <span class="ai-bubble-icon-chat">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </span>
+                <span class="ai-bubble-icon-close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </span>
+            </button>
+        </div>
     `;
 
     document.body.appendChild(rootContainer);
 
     // 4. Logik Interaksi UI & AJAX
     const chatBubble = document.getElementById('ai-chat-bubble');
+    const chatTeaser = document.getElementById('ai-chat-teaser');
     const chatWindow = document.getElementById('ai-chat-window');
     const closeBtn = document.getElementById('ai-chat-close');
+    const resetBtn = document.getElementById('ai-chat-reset');
     const msgList = document.getElementById('ai-chat-msg-list');
     const inputField = document.getElementById('ai-chat-input-text');
     const sendBtn = document.getElementById('ai-chat-send-trigger');
     const quickChips = document.getElementById('ai-quick-chips');
 
-    function toggleChat() {
-        chatWindow.classList.toggle('ai-chat-open');
-        chatBubble.classList.toggle('ai-bubble-active');
-        if (chatWindow.classList.contains('ai-chat-open')) {
-            setTimeout(() => inputField.focus(), 300);
+    function toggleChat(forceOpen = null) {
+        const isOpen = forceOpen !== null ? forceOpen : !chatWindow.classList.contains('ai-chat-open');
+        
+        if (isOpen) {
+            chatWindow.classList.add('ai-chat-open');
+            chatBubble.classList.add('ai-bubble-active');
+            if (chatTeaser) chatTeaser.style.display = 'none';
+            setTimeout(() => {
+                inputField.focus();
+                scrollToBottom();
+            }, 250);
+        } else {
+            chatWindow.classList.remove('ai-chat-open');
+            chatBubble.classList.remove('ai-bubble-active');
+            if (chatTeaser && window.innerWidth > 640) chatTeaser.style.display = 'flex';
         }
     }
 
-    chatBubble.addEventListener('click', toggleChat);
-    closeBtn.addEventListener('click', toggleChat);
+    chatBubble.addEventListener('click', () => toggleChat());
+    if (chatTeaser) chatTeaser.addEventListener('click', () => toggleChat(true));
+    closeBtn.addEventListener('click', () => toggleChat(false));
+
+    // Reset perbualan
+    resetBtn.addEventListener('click', () => {
+        chatHistory.length = 0;
+        msgList.innerHTML = `
+            <div class="ai-message ai-message-bot">
+                <div class="ai-msg-row">
+                    <div class="ai-msg-avatar">👩‍💼</div>
+                    <div class="ai-bubble">
+                        <div class="ai-msg-text">${formatChatMessage(widgetGreeting)}</div>
+                        <span class="ai-msg-time">${getCurrentTime()}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="ai-quick-chips" id="ai-quick-chips">
+                <button class="ai-chip" data-q="Ada stok kasut saiz 42 tak?">👟 Stok Kasut 42</button>
+                <button class="ai-chip" data-q="Ada sebarang promosi atau diskaun semasa?">🎉 Promosi & Diskaun</button>
+                <button class="ai-chip" data-q="Kedai buka tak hari Ahad dan pukul berapa tutup?">⏰ Waktu Operasi</button>
+                <button class="ai-chip" data-q="Berapa kos pos ke Sabah Sarawak?">📦 Kos Penghantaran</button>
+            </div>
+        `;
+        const newChips = document.getElementById('ai-quick-chips');
+        if (newChips) {
+            newChips.addEventListener('click', onChipClick);
+        }
+    });
 
     function getCurrentTime() {
         const now = new Date();
@@ -143,6 +198,100 @@
         msgList.scrollTop = msgList.scrollHeight;
     }
 
+    function escapeHtmlOnly(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    /**
+     * Parser Markdown Mesra Pengguna untuk format Chatbot:
+     * - Menukar **bold** kepada <strong>
+     * - Menguruskan tajuk emoji (👟 Pilihan Produk, 🎉 Promosi, dll)
+     * - Membina senarai kemas (•) berserta sub-penerangan yang teratur
+     * - Menghilangkan teks mentah SQL dan tanda kurung teknikal
+     */
+    function formatChatMessage(rawText) {
+        if (!rawText) return '';
+
+        // 1. Escaping asas untuk keselamatan XSS
+        let text = rawText
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        // 2. Bold (**teks**)
+        text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+        // 3. Italic (*teks* atau _teks_)
+        text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+
+        // 4. Tag harga Ringgit Malaysia
+        text = text.replace(/\b(RM\s*\d+(?:\.\d{2})?)\b/g, '<span class="ai-price-tag">$1</span>');
+
+        // 5. Lencana status / stok
+        text = text.replace(/\b(Baki stok:\s*\d+\s*unit)/g, '<span class="ai-badge ai-badge-stock">$1</span>');
+        text = text.replace(/\b(Habis stok[^\n<]*)/g, '<span class="ai-badge ai-badge-out">$1</span>');
+        text = text.replace(/\b(Diskaun\s*\d+%)/g, '<span class="ai-badge ai-badge-promo">$1</span>');
+
+        // 6. Pisahkan baris dan bina elemen berstruktur
+        const lines = text.split('\n');
+        const output = [];
+        let inList = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+
+            if (!trimmed) {
+                if (inList) {
+                    output.push('</ul>');
+                    inList = false;
+                }
+                continue;
+            }
+
+            // Semak jika baris adalah item senarai bullet (• atau - atau *)
+            const bulletMatch = trimmed.match(/^([•\-\*])\s+(.+)$/);
+            if (bulletMatch) {
+                if (!inList) {
+                    output.push('<ul class="ai-styled-list">');
+                    inList = true;
+                }
+                output.push(`<li><span class="ai-bullet-dot">•</span><div class="ai-list-body"><span class="ai-list-title">${bulletMatch[2]}</span></div></li>`);
+                continue;
+            }
+
+            // Semak jika baris adalah penerangan sambungan kepada item senarai sebelumnya
+            if (inList && (line.startsWith('  ') || line.startsWith('\t'))) {
+                const lastIdx = output.length - 1;
+                if (lastIdx >= 0 && output[lastIdx].endsWith('</div></li>')) {
+                    output[lastIdx] = output[lastIdx].replace('</div></li>', `<span class="ai-list-desc">${trimmed}</span></div></li>`);
+                    continue;
+                }
+            }
+
+            if (inList) {
+                output.push('</ul>');
+                inList = false;
+            }
+
+            // Semak jika baris adalah tajuk seksyen dengan emoji (cth: 👟 Pilihan Produk, 🎉 Tawaran)
+            const isEmojiHeader = trimmed.match(/^([\p{Extended_Pictographic}\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+)\s*(.*)$/u);
+            if (isEmojiHeader && (trimmed.includes('<strong>') || trimmed.includes(':'))) {
+                output.push(`<div class="ai-section-heading"><span class="ai-section-icon">${isEmojiHeader[1]}</span> ${isEmojiHeader[2]}</div>`);
+            } else {
+                output.push(`<p class="ai-msg-para">${trimmed}</p>`);
+            }
+        }
+
+        if (inList) {
+            output.push('</ul>');
+        }
+
+        return output.join('');
+    }
+
     function addMessage(text, isUser = false) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `ai-message ${isUser ? 'ai-message-user' : 'ai-message-bot'}`;
@@ -150,19 +299,30 @@
         const timeStr = getCurrentTime();
 
         if (isUser) {
-            msgDiv.innerHTML = `<div class="ai-bubble"><div class="ai-msg-text">${escapeHtml(text)}</div><span class="ai-msg-time">${timeStr}</span></div>`;
+            // Mesej pengguna disanitasi
+            const safeUserText = escapeHtmlOnly(text).replace(/\n/g, '<br>');
+            msgDiv.innerHTML = `
+                <div class="ai-bubble">
+                    <div class="ai-msg-text">${safeUserText}</div>
+                    <span class="ai-msg-time">${timeStr}</span>
+                </div>
+            `;
         } else {
-            msgDiv.innerHTML = `<div class="ai-msg-row"><div class="ai-msg-avatar">👩‍💼</div><div class="ai-bubble"><div class="ai-msg-text">${escapeHtml(text)}</div><span class="ai-msg-time">${timeStr}</span></div></div>`;
+            // Mesej bot diformat melalui markdown parser
+            const formattedContent = formatChatMessage(text);
+            msgDiv.innerHTML = `
+                <div class="ai-msg-row">
+                    <div class="ai-msg-avatar">👩‍💼</div>
+                    <div class="ai-bubble">
+                        <div class="ai-msg-text">${formattedContent}</div>
+                        <span class="ai-msg-time">${timeStr}</span>
+                    </div>
+                </div>
+            `;
         }
 
         msgList.appendChild(msgDiv);
         scrollToBottom();
-    }
-
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML.replace(/\n/g, '<br>');
     }
 
     function showTyping() {
@@ -200,9 +360,10 @@
             inputField.value = '';
         }
 
-        // Sembunyikan quick chips selepas soalan pertama
-        if (quickChips) {
-            quickChips.style.display = 'none';
+        // Sembunyikan quick chips selepas mesej pertama dihantar
+        const chipsEl = document.getElementById('ai-quick-chips');
+        if (chipsEl) {
+            chipsEl.style.display = 'none';
         }
 
         const historyPayload = chatHistory.slice(-6);
@@ -224,18 +385,18 @@
             const data = await res.json();
             hideTyping();
 
-            if (data.answer) {
+            if (data && data.answer) {
                 chatHistory.push({ role: 'assistant', content: data.answer });
                 if (chatHistory.length > 10) {
                     chatHistory.splice(0, chatHistory.length - 10);
                 }
                 addMessage(data.answer, false);
             } else {
-                addMessage('Maaf, tiada jawapan diterima.', false);
+                addMessage('Maaf, tiada jawapan diterima daripada pelayan.', false);
             }
         } catch (err) {
             hideTyping();
-            addMessage('Ralat sambungan ke pelayan chatbot.', false);
+            addMessage('Maaf, terdapat ralat semasa menyambung ke perkhidmatan chatbot. Sila cuba lagi sebentar lagi.', false);
         }
     }
 
@@ -249,18 +410,24 @@
 
     const emojiBtn = document.getElementById('ai-emoji-btn');
     if (emojiBtn) {
+        const friendlyEmojis = ['😊', '👟', '👕', '🕒', '👍', '🙏'];
+        let emojiIdx = 0;
         emojiBtn.addEventListener('click', () => {
-            inputField.value += ' 😊 ';
+            const em = friendlyEmojis[emojiIdx % friendlyEmojis.length];
+            emojiIdx++;
+            inputField.value += ' ' + em + ' ';
             inputField.focus();
         });
     }
 
+    function onChipClick(e) {
+        const chip = e.target.closest('.ai-chip');
+        if (chip && chip.dataset.q) {
+            handleSend(chip.dataset.q);
+        }
+    }
+
     if (quickChips) {
-        quickChips.addEventListener('click', (e) => {
-            const chip = e.target.closest('.ai-chip');
-            if (chip && chip.dataset.q) {
-                handleSend(chip.dataset.q);
-            }
-        });
+        quickChips.addEventListener('click', onChipClick);
     }
 })();

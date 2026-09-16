@@ -1,6 +1,6 @@
 {
-    "provider": "gemini",
-    "gemini_api_key": "AIzaSyDWHot1ZnMa1V-MwSAl_xfUsqHc0KB1K_I",
+    "provider": "ollama",
+    "gemini_api_key": "AIzaSyA1lY_TSxbjTyveuffTRieMtCRY4xe0w9w",
     "gemini_chat_model": "gemini-2.5-flash",
     "gemini_embedding_model": "gemini-embedding-001",
     "ollama_host": "http://localhost:11434",

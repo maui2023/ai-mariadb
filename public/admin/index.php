@@ -677,11 +677,28 @@ function maskApiKey(string $key): string
                             <div class="form-row" style="margin-top: 12px;">
                                 <div class="form-group">
                                     <label>Model Chat LLM</label>
-                                    <input type="text" id="ollama_chat_model" value="<?= htmlspecialchars($settings['ollama_chat_model'] ?? Config::CHAT_MODEL) ?>">
+                                    <input type="text" id="ollama_chat_model" list="ollama-chat-models-list" value="<?= htmlspecialchars($settings['ollama_chat_model'] ?? Config::CHAT_MODEL) ?>" placeholder="cth: qwen2.5:0.5b">
+                                    <datalist id="ollama-chat-models-list">
+                                        <?php foreach ($ollamaModels as $m): ?>
+                                            <option value="<?= htmlspecialchars($m) ?>"><?= htmlspecialchars($m) ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="qwen2.5:0.5b">qwen2.5:0.5b (Pantas & Tepat Bahasa Melayu)</option>
+                                        <option value="llama3.2:1b">llama3.2:1b (Alternatif 1B)</option>
+                                        <option value="qwen2.5-coder:1.5b">qwen2.5-coder:1.5b</option>
+                                    </datalist>
+                                    <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">💡 Cadangan: <code>qwen2.5:0.5b</code> untuk respon pantas tanpa halusinasi, atau <code>llama3.2:1b</code>.</span>
                                 </div>
                                 <div class="form-group">
                                     <label>Model Embedding</label>
-                                    <input type="text" id="ollama_embedding_model" value="<?= htmlspecialchars($settings['ollama_embedding_model'] ?? Config::EMBEDDING_MODEL) ?>">
+                                    <input type="text" id="ollama_embedding_model" list="ollama-embed-models-list" value="<?= htmlspecialchars($settings['ollama_embedding_model'] ?? Config::EMBEDDING_MODEL) ?>">
+                                    <datalist id="ollama-embed-models-list">
+                                        <?php foreach ($ollamaModels as $m): ?>
+                                            <?php if (str_contains($m, 'embed') || str_contains($m, 'gemma') || str_contains($m, 'bge') || str_contains($m, 'minilm')): ?>
+                                                <option value="<?= htmlspecialchars($m) ?>"></option>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                        <option value="embeddinggemma">embeddinggemma (Lalai)</option>
+                                    </datalist>
                                 </div>
                             </div>
                         </div>
