@@ -4,25 +4,94 @@
  * layout responsif mesra mudah alih, dan perlindungan bebas halusinasi.
  */
 (function () {
-    // 1. Dapatkan tetapan daripada atribut script tag atau konfigurasi global
-    const currentScript = document.currentScript || (function () {
+    // 1. Dapatkan tetapan daripada atribut script tag (menyokong async, defer, dan pelbagai website pelanggan)
+    const findWidgetScript = () => {
+        if (document.currentScript) return document.currentScript;
+        
+        const byId = document.getElementById('ai-mariadb-script');
+        if (byId) return byId;
+
+        const candidate = document.querySelector('script[src*="chat.js"], script[data-api*="chat.php"]');
+        if (candidate) return candidate;
+
         const scripts = document.getElementsByTagName('script');
-        return scripts[scripts.length - 1];
-    })();
+        for (let i = scripts.length - 1; i >= 0; i--) {
+            if (scripts[i].src && scripts[i].src.includes('chat.js')) {
+                return scripts[i];
+            }
+        }
+        return null;
+    };
 
-    const apiUrl = currentScript?.getAttribute('data-api') || '/api/chat.php';
-    const widgetTitle = currentScript?.getAttribute('data-title') || 'Pembantu Butik AI';
+    const currentScript = findWidgetScript();
+    let scriptSrc = currentScript?.src || '';
+
+    // Kenal pasti asal pelayan (Origin) daripada script.src atau tetapan global
+    let defaultOrigin = 'https://chat.kpst.my';
+    if (scriptSrc && (scriptSrc.startsWith('http://') || scriptSrc.startsWith('https://'))) {
+        try {
+            defaultOrigin = new URL(scriptSrc).origin;
+        } catch (e) {}
+    }
+
+    // Bina URL API: pastikan sentiasa menghala ke domain pelayan AI (bukan domain pelanggan)
+    let apiUrl = (typeof window !== 'undefined' && window.AI_CHAT_API) || currentScript?.getAttribute('data-api');
+    if (!apiUrl) {
+        apiUrl = defaultOrigin + '/api/chat.php';
+    } else if (apiUrl.startsWith('/')) {
+        apiUrl = defaultOrigin + apiUrl;
+    }
+
+    // Auto Upgrade ke HTTPS sekiranya laman web pelanggan menggunakan HTTPS (mengelakkan sekatan Mixed Content)
+    if (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:') {
+        if (apiUrl.startsWith('http://')) {
+            apiUrl = apiUrl.replace(/^http:\/\//i, 'https://');
+        }
+        if (scriptSrc.startsWith('http://')) {
+            scriptSrc = scriptSrc.replace(/^http:\/\//i, 'https://');
+        }
+        if (defaultOrigin.startsWith('http://')) {
+            defaultOrigin = defaultOrigin.replace(/^http:\/\//i, 'https://');
+        }
+    }
+
+    const widgetTitle = currentScript?.getAttribute('data-title') || 'Pembantu Kedai AI';
     const widgetGreeting = currentScript?.getAttribute('data-greeting') || 'Hai! 👋 Selamat datang. Ada apa yang boleh saya bantu mengenai produk, harga, atau promosi kami?';
+    const customChipsAttr = currentScript?.getAttribute('data-chips');
 
-    // 2. Muat turun CSS widget secara automatik sekiranya belum ada
+    // 2. Muat turun CSS widget secara automatik dari domain pelayan AI
     if (!document.getElementById('ai-chat-css')) {
         const cssLink = document.createElement('link');
         cssLink.id = 'ai-chat-css';
         cssLink.rel = 'stylesheet';
-        const scriptSrc = currentScript?.src || '';
-        const cssPath = scriptSrc ? scriptSrc.replace(/\.js$/, '.css') : '/widget/chat.css';
+        let cssPath = scriptSrc ? scriptSrc.replace(/\.js(\?.*)?$/, '.css$1') : defaultOrigin + '/widget/chat.css';
+        if (!cssPath.startsWith('http')) {
+            cssPath = defaultOrigin + (cssPath.startsWith('/') ? '' : '/') + cssPath;
+        }
+        if (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:' && cssPath.startsWith('http://')) {
+            cssPath = cssPath.replace(/^http:\/\//i, 'https://');
+        }
         cssLink.href = cssPath;
         document.head.appendChild(cssLink);
+    }
+
+    function renderQuickChipsHtml() {
+        if (customChipsAttr === 'none') return '';
+        if (customChipsAttr) {
+            const list = customChipsAttr.split(/[,|]/).map(s => s.trim()).filter(Boolean);
+            if (list.length > 0) {
+                const buttons = list.map(q => `<button class="ai-chip" data-q="${escapeHtmlOnly(q)}">💬 ${escapeHtmlOnly(q)}</button>`).join('');
+                return `<div class="ai-quick-chips" id="ai-quick-chips">${buttons}</div>`;
+            }
+        }
+        return `
+            <div class="ai-quick-chips" id="ai-quick-chips">
+                <button class="ai-chip" data-q="Ada sebarang promosi atau diskaun semasa?">🎉 Promosi & Diskaun</button>
+                <button class="ai-chip" data-q="Berapa kos dan tempoh penghantaran pos?">📦 Kos Penghantaran</button>
+                <button class="ai-chip" data-q="Bila waktu operasi kedai dan hari apa buka?">⏰ Waktu Operasi</button>
+                <button class="ai-chip" data-q="Apakah produk utama yang anda tawarkan?">🛍️ Pilihan Produk</button>
+            </div>
+        `;
     }
 
     // 3. Bina elemen HTML widget
@@ -70,12 +139,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="ai-quick-chips" id="ai-quick-chips">
-                    <button class="ai-chip" data-q="Ada stok kasut saiz 42 tak?">👟 Stok Kasut 42</button>
-                    <button class="ai-chip" data-q="Ada sebarang promosi atau diskaun semasa?">🎉 Promosi & Diskaun</button>
-                    <button class="ai-chip" data-q="Kedai buka tak hari Ahad dan pukul berapa tutup?">⏰ Waktu Operasi</button>
-                    <button class="ai-chip" data-q="Berapa kos pos ke Sabah Sarawak?">📦 Kos Penghantaran</button>
-                </div>
+                ${renderQuickChipsHtml()}
             </div>
 
             <div class="ai-chat-input-container">
@@ -176,12 +240,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ai-quick-chips" id="ai-quick-chips">
-                <button class="ai-chip" data-q="Ada stok kasut saiz 42 tak?">👟 Stok Kasut 42</button>
-                <button class="ai-chip" data-q="Ada sebarang promosi atau diskaun semasa?">🎉 Promosi & Diskaun</button>
-                <button class="ai-chip" data-q="Kedai buka tak hari Ahad dan pukul berapa tutup?">⏰ Waktu Operasi</button>
-                <button class="ai-chip" data-q="Berapa kos pos ke Sabah Sarawak?">📦 Kos Penghantaran</button>
-            </div>
+            ${renderQuickChipsHtml()}
         `;
         const newChips = document.getElementById('ai-quick-chips');
         if (newChips) {
@@ -382,6 +441,17 @@
                 }),
             });
 
+            if (!res.ok) {
+                let errText = '';
+                try {
+                    const errObj = await res.json();
+                    if (errObj && (errObj.error || errObj.answer)) {
+                        errText = errObj.error || errObj.answer;
+                    }
+                } catch (_) {}
+                throw new Error(errText || `Ralat sambungan (HTTP ${res.status})`);
+            }
+
             const data = await res.json();
             hideTyping();
 
@@ -391,12 +461,15 @@
                     chatHistory.splice(0, chatHistory.length - 10);
                 }
                 addMessage(data.answer, false);
+            } else if (data && data.error) {
+                addMessage(`Ralat: ${data.error}`, false);
             } else {
                 addMessage('Maaf, tiada jawapan diterima daripada pelayan.', false);
             }
         } catch (err) {
+            console.error('[AiMariaDb Widget Error]', err);
             hideTyping();
-            addMessage('Maaf, terdapat ralat semasa menyambung ke perkhidmatan chatbot. Sila cuba lagi sebentar lagi.', false);
+            addMessage('Maaf, terdapat ralat semasa menyambung ke perkhidmatan chatbot. Sila pastikan sambungan internet dan URL API adalah sah.', false);
         }
     }
 

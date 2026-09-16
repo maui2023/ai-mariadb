@@ -868,16 +868,17 @@ function maskApiKey(string $key): string
 
                     <div class="code-box">
                         <button class="copy-btn" onclick="copySnippet()">Salin</button>
-                        <code id="embed-code-text">&lt;!-- AiMariaDb Chatbot Widget --&gt;
+                        <code id="embed-code-text">&lt;!-- AiMariaDb Chatbot Widget (Sesuai untuk sebarang Website Pelanggan) --&gt;
 &lt;script 
-    src="http://<?= $_SERVER['HTTP_HOST'] ?? 'localhost:8080' ?>/widget/chat.js" 
-    data-api="http://<?= $_SERVER['HTTP_HOST'] ?? 'localhost:8080' ?>/api/chat.php"
+    id="ai-mariadb-script"
+    src="https://<?= $_SERVER['HTTP_HOST'] ?? 'chat.kpst.my' ?>/widget/chat.js" 
+    data-api="https://<?= $_SERVER['HTTP_HOST'] ?? 'chat.kpst.my' ?>/api/chat.php"
     data-title="Pembantu Kedai AI"
     async defer&gt;
 &lt;/script&gt;</code>
                     </div>
 
-                    <p style="font-size: 12px; color: #64748b;">Untuk framework PHP (Laravel/WordPress): Anda juga boleh menggunakan <code>require_once 'plugin/embed.php'; render_ai_chatbot();</code></p>
+                    <p style="font-size: 12px; color: #64748b;">Tips Pelanggan: Anda boleh ubah <code>data-title="Nama Kedai Anda"</code> atau tambah <code>data-chips="Soalan 1,Soalan 2"</code> untuk butang pantas tersuai.</p>
                 </div>
 
             </div>

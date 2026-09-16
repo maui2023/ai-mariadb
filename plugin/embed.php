@@ -28,6 +28,7 @@ if (!function_exists('render_ai_chatbot')) {
         return <<<HTML
 <!-- AiMariaDb Chatbot Plugin -->
 <script 
+    id="ai-mariadb-script"
     src="{$widgetUrl}" 
     data-api="{$apiUrl}" 
     data-title="{$title}" 
