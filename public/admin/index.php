@@ -1385,7 +1385,8 @@ function maskApiKey(string $key): string
                 themeParam = `\n    data-theme="${currentSelectedTheme}"`;
             }
 
-            const snippet = `<!-- AiMariaDb Chatbot Widget (Sesuai untuk sebarang Website Pelanggan) -->\n<script \n    id="ai-mariadb-script"\n    src="https://${host}/widget/chat.js" \n    data-api="https://${host}/api/chat.php"\n    data-title="Pembantu Kedai AI"${themeParam}\n    async defer>\n</script>`;
+            const closeScriptTag = '<' + '/script>';
+            const snippet = `<!-- AiMariaDb Chatbot Widget (Sesuai untuk sebarang Website Pelanggan) -->\n<script \n    id="ai-mariadb-script"\n    src="https://${host}/widget/chat.js" \n    data-api="https://${host}/api/chat.php"\n    data-title="Pembantu Kedai AI"${themeParam}\n    async defer>\n${closeScriptTag}`;
             
             document.getElementById('embed-code-text').textContent = snippet;
         }
