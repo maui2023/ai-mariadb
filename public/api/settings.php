@@ -38,6 +38,16 @@ try {
         $geminiOnline = !empty($settings['gemini_api_key']) ? $gemini->isAvailable() : false;
 
         $ollamaModels = $ollamaOnline ? $ollama->listModels() : [];
+        $geminiModelsData = null;
+        if (!empty($settings['gemini_api_key'])) {
+            try {
+                $geminiModelsData = $gemini->fetchAvailableModels();
+            } catch (\Throwable $e) {
+                $geminiModelsData = GeminiClient::getFallbackModels();
+            }
+        } else {
+            $geminiModelsData = GeminiClient::getFallbackModels();
+        }
 
         echo json_encode([
             'success' => true,
@@ -56,6 +66,7 @@ try {
                 'gemini_online' => $geminiOnline,
                 'active_provider' => Config::getAiProvider(),
                 'available_ollama_models' => $ollamaModels,
+                'available_gemini_models' => $geminiModelsData,
             ],
         ]);
         exit;
@@ -75,19 +86,29 @@ try {
                 echo json_encode([
                     'success' => false,
                     'message' => 'Sila masukkan Gemini API Key terlebih dahulu sebelum menguji sambungan.',
+                    'models' => GeminiClient::getFallbackModels(),
                 ]);
                 exit;
             }
 
             $client = new GeminiClient($apiKey);
-            $available = $client->isAvailable();
+            try {
+                $modelsData = $client->fetchAvailableModels($apiKey);
+                $chatCount = count($modelsData['chat_models'] ?? []);
+                $embCount = count($modelsData['embedding_models'] ?? []);
 
-            echo json_encode([
-                'success' => $available,
-                'message' => $available 
-                    ? 'Sambungan Google Gemini BERJAYA! Kunci API sah.' 
-                    : 'Gagal menyambung ke Google Gemini. Sila pastikan kunci API sah dan capaian internet tersedia.',
-            ]);
+                echo json_encode([
+                    'success' => true,
+                    'message' => "Sambungan Google Gemini BERJAYA! Ditemui {$chatCount} model sembang & {$embCount} model vektor sedia dipilih.",
+                    'models' => $modelsData,
+                ]);
+            } catch (\Throwable $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Gagal menyambung ke Google Gemini: ' . $e->getMessage(),
+                    'models' => GeminiClient::getFallbackModels(),
+                ]);
+            }
             exit;
         }
 

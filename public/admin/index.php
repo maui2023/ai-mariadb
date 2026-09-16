@@ -19,6 +19,16 @@ $ollamaModels = $ollamaOnline ? $ollama->listModels() : [];
 $gemini = AiFactory::getGeminiClient();
 $geminiApiKeySet = !empty($settings['gemini_api_key']);
 $geminiOnline = $geminiApiKeySet ? $gemini->isAvailable() : false;
+$geminiModelsData = null;
+if ($geminiApiKeySet) {
+    try {
+        $geminiModelsData = $gemini->fetchAvailableModels();
+    } catch (\Throwable $e) {
+        $geminiModelsData = GeminiClient::getFallbackModels();
+    }
+} else {
+    $geminiModelsData = GeminiClient::getFallbackModels();
+}
 
 $pdo = Database::getLocalPdo();
 $connCount = (int)$pdo->query("SELECT COUNT(*) FROM ai_db_connections")->fetchColumn();
@@ -645,14 +655,41 @@ function maskApiKey(string $key): string
                                 <div class="form-group">
                                     <label>Model Chat LLM</label>
                                     <select id="gemini_chat_model">
-                                        <option value="gemini-2.5-flash" <?= ($settings['gemini_chat_model'] ?? '') === 'gemini-2.5-flash' ? 'selected' : '' ?>>gemini-2.5-flash (Pantas & Disyorkan)</option>
-                                        <option value="gemini-flash-latest" <?= ($settings['gemini_chat_model'] ?? '') === 'gemini-flash-latest' ? 'selected' : '' ?>>gemini-flash-latest</option>
-                                        <option value="gemini-2.5-pro" <?= ($settings['gemini_chat_model'] ?? '') === 'gemini-2.5-pro' ? 'selected' : '' ?>>gemini-2.5-pro (Tinggi Kompleksiti)</option>
+                                        <?php if (!empty($geminiModelsData['chat_models'])): ?>
+                                            <?php foreach ($geminiModelsData['chat_models'] as $m): ?>
+                                                <option value="<?= htmlspecialchars($m['id']) ?>" <?= ($settings['gemini_chat_model'] ?? '') === $m['id'] ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($m['name']) ?> (<?= htmlspecialchars($m['id']) ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <option value="gemini-3.6-flash">Gemini 3.6 Flash (Terkini & Disyorkan)</option>
+                                            <option value="gemini-flash-latest">Gemini Flash Latest</option>
+                                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                        <?php endif; ?>
                                     </select>
+                                    <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;" id="gemini-chat-model-hint">
+                                        💡 Model generasi teks Google Gemini. Uji kunci untuk memuat senarai model terkini dari akaun anda.
+                                    </span>
                                 </div>
                                 <div class="form-group">
                                     <label>Model Embedding (Vektor)</label>
-                                    <input type="text" id="gemini_embedding_model" value="<?= htmlspecialchars($settings['gemini_embedding_model'] ?? 'gemini-embedding-001') ?>" readonly style="opacity: 0.85;">
+                                    <select id="gemini_embedding_model">
+                                        <?php if (!empty($geminiModelsData['embedding_models'])): ?>
+                                            <?php foreach ($geminiModelsData['embedding_models'] as $m): ?>
+                                                <option value="<?= htmlspecialchars($m['id']) ?>" <?= ($settings['gemini_embedding_model'] ?? 'gemini-embedding-001') === $m['id'] ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($m['name']) ?> (<?= htmlspecialchars($m['id']) ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <option value="gemini-embedding-001">gemini-embedding-001 (768d - Disyorkan)</option>
+                                            <option value="gemini-embedding-2">gemini-embedding-2</option>
+                                            <option value="text-embedding-004">text-embedding-004</option>
+                                        <?php endif; ?>
+                                    </select>
+                                    <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;" id="gemini-embed-model-hint">
+                                        💡 Model vektor untuk indeks pangkalan data produk (768 dimensi).
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -883,7 +920,7 @@ function maskApiKey(string $key): string
             const ind = document.getElementById('gemini-status-indicator');
 
             btn.disabled = true;
-            btn.textContent = 'Menguji...';
+            btn.textContent = 'Memanggil Model...';
 
             try {
                 const res = await fetch('/api/settings.php', {
@@ -899,16 +936,74 @@ function maskApiKey(string $key): string
                     ind.style.color = '#10b981';
                     ind.textContent = '● Bersambung';
                     showToast('✓ ' + data.message);
+
+                    if (data.models) {
+                        populateGeminiModelDropdowns(data.models);
+                    }
                 } else {
                     ind.style.color = '#f43f5e';
                     ind.textContent = '● Ralat';
                     showToast('✗ ' + data.message);
+
+                    if (data.models) {
+                        populateGeminiModelDropdowns(data.models);
+                    }
                 }
             } catch (e) {
                 showToast('Ralat menguji Gemini: ' + e.message);
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🧪 Uji Kunci';
+            }
+        }
+
+        function populateGeminiModelDropdowns(modelsData) {
+            if (!modelsData) return;
+
+            const chatSelect = document.getElementById('gemini_chat_model');
+            const embedSelect = document.getElementById('gemini_embedding_model');
+
+            const currentChat = chatSelect ? chatSelect.value : '';
+            const currentEmbed = embedSelect ? embedSelect.value : '';
+
+            // 1. Muat senarai Model Chat
+            if (chatSelect && Array.isArray(modelsData.chat_models) && modelsData.chat_models.length > 0) {
+                chatSelect.innerHTML = '';
+                modelsData.chat_models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name ? `${m.name} (${m.id})` : m.id;
+                    if (m.description) opt.title = m.description;
+                    if (m.id === currentChat) opt.selected = true;
+                    chatSelect.appendChild(opt);
+                });
+                if (!chatSelect.value && chatSelect.options.length > 0) {
+                    chatSelect.selectedIndex = 0;
+                }
+            }
+
+            // 2. Muat senarai Model Embedding
+            if (embedSelect && Array.isArray(modelsData.embedding_models) && modelsData.embedding_models.length > 0) {
+                embedSelect.innerHTML = '';
+                modelsData.embedding_models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name ? `${m.name} (${m.id})` : m.id;
+                    if (m.description) opt.title = m.description;
+                    if (m.id === currentEmbed) opt.selected = true;
+                    embedSelect.appendChild(opt);
+                });
+                if (!embedSelect.value && embedSelect.options.length > 0) {
+                    embedSelect.selectedIndex = 0;
+                }
+            }
+
+            const chatHint = document.getElementById('gemini-chat-model-hint');
+            if (chatHint && modelsData.chat_models) {
+                const chatCount = modelsData.chat_models.length;
+                const embCount = modelsData.embedding_models ? modelsData.embedding_models.length : 0;
+                chatHint.innerHTML = `✨ <strong>${chatCount} model sembang</strong> dan <strong>${embCount} model vektor</strong> berjaya dipanggil & sedia dipilih!`;
+                chatHint.style.color = '#38bdf8';
             }
         }
 

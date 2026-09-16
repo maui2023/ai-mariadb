@@ -47,34 +47,156 @@ class GeminiClient implements AiClientInterface
     }
 
     /**
-     * Dapatkan senarai model Gemini yang lazim disokong
+     * Dapatkan senarai model yang disokong terus daripada Google Gemini API
+     * dan tapis kepada Model Chat & Model Embedding yang sesuai untuk dipilih pengguna
      */
-    public function listModels(): array
+    public function fetchAvailableModels(?string $apiKey = null): array
     {
-        if (empty($this->apiKey)) {
-            return [
-                'gemini-2.5-flash',
-                'gemini-flash-latest',
-                'gemini-2.5-pro',
-                'gemini-embedding-001',
-            ];
+        $key = trim($apiKey ?? $this->apiKey);
+        if (empty($key)) {
+            return self::getFallbackModels();
         }
 
         try {
-            $url = "{$this->baseUrl}/models?key=" . urlencode($this->apiKey);
-            $res = $this->request($url, 'GET', null, 5);
-            $models = [];
-            if (!empty($res['models'])) {
-                foreach ($res['models'] as $m) {
-                    $name = str_replace('models/', '', $m['name'] ?? '');
-                    if (!empty($name)) {
-                        $models[] = $name;
+            $url = "{$this->baseUrl}/models?key=" . urlencode($key);
+            $res = $this->request($url, 'GET', null, 8);
+
+            if (empty($res['models']) || !is_array($res['models'])) {
+                return self::getFallbackModels();
+            }
+
+            $chatModels = [];
+            $embeddingModels = [];
+
+            $excludedChatKeywords = [
+                'tts', 'transcribe', 'image', 'preview-image', 'vision-only',
+                'veo', 'banana', 'lyria', 'robotics', 'clip', 'customtools',
+                'computer-use', 'bidi', 'live', 'native-audio', 'aqa'
+            ];
+
+            foreach ($res['models'] as $m) {
+                $fullName = $m['name'] ?? '';
+                $modelId = str_replace('models/', '', $fullName);
+                $displayName = $m['displayName'] ?? $modelId;
+                $description = $m['description'] ?? '';
+                $methods = $m['supportedGenerationMethods'] ?? [];
+
+                // 1. Tapis Model Embedding
+                if (in_array('embedContent', $methods, true) || in_array('batchEmbedContents', $methods, true) || str_contains($modelId, 'embedding')) {
+                    $embeddingModels[] = [
+                        'id' => $modelId,
+                        'name' => $displayName ?: $modelId,
+                        'description' => $description,
+                    ];
+                    continue;
+                }
+
+                // 2. Tapis Model Chat / Teks Generasi
+                if (in_array('generateContent', $methods, true)) {
+                    $skip = false;
+                    foreach ($excludedChatKeywords as $k) {
+                        if (str_contains(strtolower($modelId), $k)) {
+                            $skip = true;
+                            break;
+                        }
                     }
+                    if ($skip) {
+                        continue;
+                    }
+
+                    $chatModels[] = [
+                        'id' => $modelId,
+                        'name' => $displayName ?: $modelId,
+                        'description' => $description,
+                    ];
                 }
             }
-            return !empty($models) ? $models : ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-embedding-001'];
+
+            // Susun model chat supaya model disyorkan (flash & pro) berada di atas
+            usort($chatModels, function ($a, $b) {
+                $scoreA = 0;
+                $scoreB = 0;
+                $idA = strtolower($a['id']);
+                $idB = strtolower($b['id']);
+
+                if (str_contains($idA, '3.6-flash')) $scoreA += 110;
+                if (str_contains($idA, 'flash-latest')) $scoreA += 105;
+                if (str_contains($idA, '3.5-flash')) $scoreA += 100;
+                if (str_contains($idA, '2.5-flash')) $scoreA += 90;
+                if (str_contains($idA, 'flash')) $scoreA += 50;
+                if (str_contains($idA, 'pro')) $scoreA += 40;
+
+                if (str_contains($idB, '3.6-flash')) $scoreB += 110;
+                if (str_contains($idB, 'flash-latest')) $scoreB += 105;
+                if (str_contains($idB, '3.5-flash')) $scoreB += 100;
+                if (str_contains($idB, '2.5-flash')) $scoreB += 90;
+                if (str_contains($idB, 'flash')) $scoreB += 50;
+                if (str_contains($idB, 'pro')) $scoreB += 40;
+
+                return $scoreB <=> $scoreA;
+            });
+
+            // Susun model embedding
+            usort($embeddingModels, function ($a, $b) {
+                $idA = strtolower($a['id']);
+                $idB = strtolower($b['id']);
+                $scoreA = str_contains($idA, 'embedding-001') ? 20 : (str_contains($idA, 'text-embedding') ? 15 : 10);
+                $scoreB = str_contains($idB, 'embedding-001') ? 20 : (str_contains($idB, 'text-embedding') ? 15 : 10);
+                return $scoreB <=> $scoreA;
+            });
+
+            return [
+                'chat_models' => !empty($chatModels) ? $chatModels : self::getFallbackModels()['chat_models'],
+                'embedding_models' => !empty($embeddingModels) ? $embeddingModels : self::getFallbackModels()['embedding_models'],
+                'total_count' => count($chatModels) + count($embeddingModels),
+            ];
+
         } catch (\Throwable $e) {
-            return ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-pro', 'gemini-embedding-001'];
+            // Lemparkan pengecualian jika mesej ralat khusus daripada Google (cth: kunci tidak sah / bocor)
+            throw $e;
+        }
+    }
+
+    /**
+     * Senarai model sandaran standard Google Gemini
+     */
+    public static function getFallbackModels(): array
+    {
+        return [
+            'chat_models' => [
+                ['id' => 'gemini-3.6-flash', 'name' => 'Gemini 3.6 Flash (Terkini & Disyorkan)', 'description' => 'Pantas dan disyorkan untuk chatbot butik'],
+                ['id' => 'gemini-flash-latest', 'name' => 'Gemini Flash Latest', 'description' => 'Model versi flash terkini'],
+                ['id' => 'gemini-3.5-flash', 'name' => 'Gemini 3.5 Flash', 'description' => 'Versi flash stabil'],
+                ['id' => 'gemini-2.5-flash', 'name' => 'Gemini 2.5 Flash', 'description' => 'Model pantas dan cekap'],
+                ['id' => 'gemini-2.5-pro', 'name' => 'Gemini 2.5 Pro', 'description' => 'Penaakulan mendalam dan kompleks'],
+                ['id' => 'gemini-3.1-flash-lite', 'name' => 'Gemini 3.1 Flash Lite', 'description' => 'Sangat ringan & pantas'],
+            ],
+            'embedding_models' => [
+                ['id' => 'gemini-embedding-001', 'name' => 'gemini-embedding-001 (768d - Disyorkan)', 'description' => 'Vektor 768-dimensi (Piawaian ai-mariadb)'],
+                ['id' => 'gemini-embedding-2', 'name' => 'gemini-embedding-2', 'description' => 'Vektor generasi baharu'],
+                ['id' => 'text-embedding-004', 'name' => 'text-embedding-004', 'description' => 'Model embedding Google v4'],
+            ],
+            'total_count' => 9,
+        ];
+    }
+
+    /**
+     * Dapatkan senarai ID model Gemini untuk kegunaan umum
+     */
+    public function listModels(): array
+    {
+        try {
+            $data = $this->fetchAvailableModels();
+            $ids = [];
+            foreach ($data['chat_models'] as $m) {
+                $ids[] = $m['id'];
+            }
+            foreach ($data['embedding_models'] as $m) {
+                $ids[] = $m['id'];
+            }
+            return !empty($ids) ? $ids : ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-embedding-001'];
+        } catch (\Throwable $e) {
+            return ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-pro', 'gemini-embedding-001'];
         }
     }
 
