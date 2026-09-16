@@ -7,6 +7,8 @@ require_once dirname(__DIR__) . '/plugin/embed.php';
 use AiMariaDb\Config;
 
 $products = [];
+$selectedTheme = htmlspecialchars($_GET['theme'] ?? 'purple', ENT_QUOTES, 'UTF-8');
+$selectedColor = !empty($_GET['color']) ? htmlspecialchars($_GET['color'], ENT_QUOTES, 'UTF-8') : null;
 try {
     $dbPath = Config::getDataDir() . '/dummy_pos.sqlite';
     if (file_exists($dbPath)) {
@@ -422,6 +424,8 @@ try {
         'widget_url' => '/widget/chat.js?v=2',
         'title' => 'Pembantu Butik AI',
         'greeting' => 'Hai! 👋 Selamat datang ke Butik Moden. Anda boleh tanya saya tentang stok saiz kasut, baju melayu atau waktu kedai kami!',
+        'theme' => $selectedTheme,
+        'color' => $selectedColor,
     ]) ?>
 
 </body>

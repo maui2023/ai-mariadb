@@ -4,14 +4,28 @@
  * layout responsif mesra mudah alih, dan perlindungan bebas halusinasi.
  */
 (function () {
-    // 1. Dapatkan tetapan daripada atribut script tag (menyokong async, defer, dan pelbagai website pelanggan)
+    // 1. Dapatkan tetapan daripada atribut script tag (menyokong async, defer, url query params, dan pelbagai website pelanggan)
     const findWidgetScript = () => {
-        if (document.currentScript) return document.currentScript;
-        
+        // Keutamaan 1: Elemen dengan id eksplisit
         const byId = document.getElementById('ai-mariadb-script');
         if (byId) return byId;
 
-        const candidate = document.querySelector('script[src*="chat.js"], script[data-api*="chat.php"]');
+        // Keutamaan 2: document.currentScript jika mengandungi atribut widget atau src chat.js
+        if (document.currentScript && (
+            document.currentScript.getAttribute('data-api') || 
+            document.currentScript.getAttribute('data-theme') || 
+            document.currentScript.getAttribute('data-color') || 
+            (document.currentScript.src && document.currentScript.src.includes('chat.js'))
+        )) {
+            return document.currentScript;
+        }
+
+        // Keutamaan 3: Skrip yang mempunyai data-theme / data-color / data-api
+        const withDataAttr = document.querySelector('script[data-theme], script[data-color], script[data-api*="chat.php"]');
+        if (withDataAttr) return withDataAttr;
+
+        // Keutamaan 4: Skrip dengan src yang mengandungi widget/chat.js atau chat.js
+        const candidate = document.querySelector('script[src*="/widget/chat.js"], script[src*="chat.js"]');
         if (candidate) return candidate;
 
         const scripts = document.getElementsByTagName('script');
@@ -20,11 +34,28 @@
                 return scripts[i];
             }
         }
-        return null;
+        return document.currentScript || null;
     };
 
     const currentScript = findWidgetScript();
     let scriptSrc = currentScript?.src || '';
+
+    // Kenal pasti sebarang parameter dalam URL skrip (cth: chat.js?theme=gold-black&v=2)
+    let urlParams = null;
+    try {
+        if (scriptSrc && scriptSrc.includes('?')) {
+            const baseUri = (typeof window !== 'undefined' && window.location && window.location.href) ? window.location.href : 'http://localhost';
+            urlParams = new URL(scriptSrc, baseUri).searchParams;
+        }
+    } catch (e) {}
+
+    const getParamOrAttr = (attrName, paramName) => {
+        let val = currentScript?.getAttribute(attrName);
+        if (!val && urlParams) {
+            val = urlParams.get(paramName || attrName.replace(/^data-/, ''));
+        }
+        return val;
+    };
 
     // Kenal pasti asal pelayan (Origin) daripada script.src atau tetapan global
     let defaultOrigin = 'https://chat.kpst.my';
@@ -35,7 +66,7 @@
     }
 
     // Bina URL API: pastikan sentiasa menghala ke domain pelayan AI (bukan domain pelanggan)
-    let apiUrl = (typeof window !== 'undefined' && window.AI_CHAT_API) || currentScript?.getAttribute('data-api');
+    let apiUrl = (typeof window !== 'undefined' && window.AI_CHAT_API) || getParamOrAttr('data-api', 'api');
     if (!apiUrl) {
         apiUrl = defaultOrigin + '/api/chat.php';
     } else if (apiUrl.startsWith('/')) {
@@ -55,13 +86,13 @@
         }
     }
 
-    const widgetTitle = currentScript?.getAttribute('data-title') || 'Pembantu Kedai AI';
-    const widgetGreeting = currentScript?.getAttribute('data-greeting') || 'Hai! 👋 Selamat datang. Ada apa yang boleh saya bantu mengenai produk, harga, atau promosi kami?';
-    const customChipsAttr = currentScript?.getAttribute('data-chips');
-    const themeAttr = currentScript?.getAttribute('data-theme') || (typeof window !== 'undefined' && window.AI_CHAT_THEME) || 'purple';
-    const colorAttr = currentScript?.getAttribute('data-color') || currentScript?.getAttribute('data-primary') || (typeof window !== 'undefined' && window.AI_CHAT_COLOR);
-    const headerAttr = currentScript?.getAttribute('data-header') || (typeof window !== 'undefined' && window.AI_CHAT_HEADER);
-    const modeAttr = currentScript?.getAttribute('data-mode') || (typeof window !== 'undefined' && window.AI_CHAT_MODE) || 'light';
+    const widgetTitle = getParamOrAttr('data-title', 'title') || 'Pembantu Kedai AI';
+    const widgetGreeting = getParamOrAttr('data-greeting', 'greeting') || 'Hai! 👋 Selamat datang. Ada apa yang boleh saya bantu mengenai produk, harga, atau promosi kami?';
+    const customChipsAttr = getParamOrAttr('data-chips', 'chips');
+    const themeAttr = getParamOrAttr('data-theme', 'theme') || (typeof window !== 'undefined' && window.AI_CHAT_THEME) || (typeof document !== 'undefined' && document.body?.getAttribute('data-ai-theme')) || 'purple';
+    const colorAttr = getParamOrAttr('data-color', 'color') || getParamOrAttr('data-primary', 'primary') || (typeof window !== 'undefined' && window.AI_CHAT_COLOR);
+    const headerAttr = getParamOrAttr('data-header', 'header') || (typeof window !== 'undefined' && window.AI_CHAT_HEADER);
+    const modeAttr = getParamOrAttr('data-mode', 'mode') || (typeof window !== 'undefined' && window.AI_CHAT_MODE) || 'light';
 
     // Helper warna untuk menjana variasi tema dinamik
     function adjustHex(hex, percent) {
@@ -561,24 +592,27 @@
         if (!rootContainer) return;
 
         let themeVars = null;
-        const normalized = (themeKeyOrHex || '').toLowerCase().trim();
+        const rawVal = (themeKeyOrHex || '').trim();
+        const normalized = rawVal.toLowerCase().replace(/[\+_\s]+/g, '-');
+        const hexMatch = rawVal.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
 
-        if (normalized === 'gold-black' || normalized === 'black-gold' || normalized === 'gold' || normalized === 'emas') {
+        if (normalized === 'gold-black' || normalized === 'black-gold' || normalized === 'gold' || normalized === 'emas' || normalized === 'goldblack' || normalized === 'blackgold' || normalized === 'gold-hitam' || normalized === 'hitam-emas') {
             themeVars = Object.assign({}, THEME_PRESETS['gold-black']);
-        } else if (normalized === 'black-red' || normalized === 'red-black' || normalized === 'red' || normalized === 'merah') {
+        } else if (normalized === 'black-red' || normalized === 'red-black' || normalized === 'red' || normalized === 'merah' || normalized === 'blackred' || normalized === 'redblack' || normalized === 'hitam-merah' || normalized === 'merah-hitam') {
             themeVars = Object.assign({}, THEME_PRESETS['black-red']);
-        } else if (normalized === 'emerald' || normalized === 'green' || normalized === 'hijau' || normalized === 'herba') {
+        } else if (normalized === 'emerald' || normalized === 'green' || normalized === 'hijau' || normalized === 'herba' || normalized === 'mint' || normalized === 'teal') {
             themeVars = Object.assign({}, THEME_PRESETS['emerald']);
-        } else if (normalized === 'blue' || normalized === 'biru' || normalized === 'ocean' || normalized === 'corporate') {
+        } else if (normalized === 'blue' || normalized === 'biru' || normalized === 'ocean' || normalized === 'corporate' || normalized === 'sky' || normalized === 'navy') {
             themeVars = Object.assign({}, THEME_PRESETS['blue']);
-        } else if (normalized === 'orange' || normalized === 'jingga' || normalized === 'sunset') {
+        } else if (normalized === 'orange' || normalized === 'jingga' || normalized === 'sunset' || normalized === 'amber') {
             themeVars = Object.assign({}, THEME_PRESETS['orange']);
-        } else if (normalized === 'dark' || normalized === 'gelap' || normalized === 'obsidian' || normalized === 'black') {
+        } else if (normalized === 'dark' || normalized === 'gelap' || normalized === 'obsidian' || normalized === 'black' || normalized === 'hitam' || normalized === 'night') {
             themeVars = Object.assign({}, THEME_PRESETS['dark']);
         } else if (THEME_PRESETS[normalized]) {
             themeVars = Object.assign({}, THEME_PRESETS[normalized]);
-        } else if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(themeKeyOrHex)) {
-            themeVars = buildCustomTheme(themeKeyOrHex, customHeader, mode === 'dark');
+        } else if (hexMatch) {
+            const hexColor = hexMatch[0].startsWith('#') ? hexMatch[0] : '#' + hexMatch[0];
+            themeVars = buildCustomTheme(hexColor, customHeader, mode === 'dark');
         } else {
             themeVars = Object.assign({}, THEME_PRESETS['purple']);
         }
@@ -605,6 +639,9 @@
 
         for (const [prop, val] of Object.entries(themeVars)) {
             rootContainer.style.setProperty(prop, val);
+            if (typeof document !== 'undefined' && document.documentElement) {
+                document.documentElement.style.setProperty(prop, val);
+            }
         }
 
         // Suntik tag <style> dinamik terus ke <head> bagi mengatasi sebarang cache CSS lama
