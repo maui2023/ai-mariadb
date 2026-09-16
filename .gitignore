@@ -1,0 +1,10 @@
+.htaccess
+404.html
+502.html
+index.html
+public/.user.ini
+public/index.html
+.env
+.env.example
+.env.*.local
+*.log
